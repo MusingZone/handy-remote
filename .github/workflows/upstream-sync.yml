@@ -1,18 +1,30 @@
 name: "upstream sync"
-# On request: merge a newer upstream release on sync/<tag> and check the pull request.
-# Never merge the pull request or publish a release automatically.
-# A merge conflict opens (or updates) an issue labelled upstream-conflict instead.
+# Every 6 hours: when cjpais/Handy has a release newer than .upstream-version, merge it on branch
+# sync/<tag>, run the fork's checks, merge the pull request and start remote-release.yml (a full
+# release, which installed copies update to).
+# Conflicts are resolved hunk by hunk with a GitHub Models chat model (tools/ci/sync_merge.py);
+# lock files take upstream's version and are refreshed; upstream locales missing the fork's strings
+# get the English text. Nothing is merged or released unless the fork's full CI passes on the result.
+# A conflict the model cannot resolve, or failing checks, opens (or updates) an issue labelled
+# upstream-conflict and leaves sync/<tag> for a maintainer.
 #
 # Secret SYNC_TOKEN (optional, recommended): a fine-grained token for this repository only with
 # Contents, Pull requests and Workflows read/write. GITHUB_TOKEN cannot push or merge changes to
 # .github/workflows/, which upstream releases often contain.
+# Variable SYNC_AI_MODEL (optional): GitHub Models model id, default openai/gpt-4.1.
 on:
+  schedule:
+    - cron: "17 */6 * * *"
   workflow_dispatch:
     inputs:
       tag:
         description: "Upstream tag to merge (default: latest upstream release)"
         type: string
         default: ""
+      release:
+        description: "Merge and publish a release when the checks pass"
+        type: boolean
+        default: true
 
 concurrency:
   group: upstream-sync
@@ -22,11 +34,30 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  actions: write
+  models: read
 
 env:
   UPSTREAM: cjpais/Handy
 
 jobs:
+  # Upstream workflows stay in the tree for clean merges but must not run in this fork.
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Keep upstream workflows disabled
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow list --repo "$GITHUB_REPOSITORY" --all --json path,state \
+            -q '.[] | select(.state == "active") | .path' |
+          while read -r path; do
+            case "$(basename "$path")" in
+              remote-*|upstream-sync.yml) ;;
+              *) echo "disabling $path"; gh workflow disable "$(basename "$path")" --repo "$GITHUB_REPOSITORY" ;;
+            esac
+          done
+
   merge:
     runs-on: ubuntu-latest
     outputs:
@@ -67,28 +98,56 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
 
+      - uses: oven-sh/setup-bun@v2
+        if: steps.find.outputs.tag
+
       - name: Merge the upstream release
         id: git
         if: steps.find.outputs.tag
         env:
           TAG: ${{ steps.find.outputs.tag }}
           BRANCH: ${{ steps.find.outputs.branch }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SYNC_AI_MODEL: ${{ vars.SYNC_AI_MODEL }}
         run: |
           set -uo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Use the fork's helper even if the merge conflicts in it.
+          cp tools/ci/sync_merge.py "$RUNNER_TEMP/sync_merge.py"
           git fetch --no-tags "https://github.com/$UPSTREAM.git" "refs/tags/$TAG:refs/tags/$TAG"
           git checkout -B "$BRANCH"
-          if git merge --no-ff --no-edit -m "upstream: merge $TAG" "$TAG" > "$RUNNER_TEMP/merge.log" 2>&1; then
-            echo "$TAG" > .upstream-version
-            git commit -am "upstream: track $TAG"
-            echo "conflict=false" >> "$GITHUB_OUTPUT"
-          else
+          locks='(^|/)(Cargo\.lock|bun\.lockb?|package-lock\.json)$'
+          : > "$RUNNER_TEMP/ai-files.txt"
+          : > "$RUNNER_TEMP/lock-files.txt"
+          if ! git -c merge.conflictStyle=diff3 merge --no-ff --no-edit -m "upstream: merge $TAG" "$TAG" > "$RUNNER_TEMP/merge.log" 2>&1; then
             cat "$RUNNER_TEMP/merge.log"
             git diff --name-only --diff-filter=U > "$RUNNER_TEMP/conflicts.txt"
-            git merge --abort
-            echo "conflict=true" >> "$GITHUB_OUTPUT"
+            grep -E "$locks" "$RUNNER_TEMP/conflicts.txt" > "$RUNNER_TEMP/lock-files.txt" || true
+            grep -vE "$locks" "$RUNNER_TEMP/conflicts.txt" > "$RUNNER_TEMP/ai-files.txt" || true
+            while read -r file; do git checkout --theirs -- "$file" && git add -- "$file"; done < "$RUNNER_TEMP/lock-files.txt"
+            mapfile -t files < "$RUNNER_TEMP/ai-files.txt"
+            if [ "${#files[@]}" -eq 0 ] || python3 "$RUNNER_TEMP/sync_merge.py" resolve "${files[@]}"; then
+              [ "${#files[@]}" -eq 0 ] || git add -- "${files[@]}"
+            fi
+            if [ -n "$(git diff --name-only --diff-filter=U)" ] || ! git commit --no-edit -q; then
+              git merge --abort
+              echo "conflict=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           fi
+          echo "$TAG" > .upstream-version
+          python3 "$RUNNER_TEMP/sync_merge.py" locales > "$RUNNER_TEMP/locales.txt" || exit 1
+          cat "$RUNNER_TEMP/locales.txt"
+          if grep -q 'Cargo.lock' "$RUNNER_TEMP/lock-files.txt"; then
+            (cd src-tauri && cargo metadata --format-version 1 > /dev/null) || exit 1
+          fi
+          if grep -q 'bun.lock' "$RUNNER_TEMP/lock-files.txt"; then
+            bun install --ignore-scripts || exit 1
+          fi
+          git add -A
+          git commit -q -m "upstream: track $TAG" || exit 1
+          echo "conflict=false" >> "$GITHUB_OUTPUT"
 
       - name: Report a merge conflict
         if: steps.git.outputs.conflict == 'true'
@@ -99,7 +158,7 @@ jobs:
           set -euo pipefail
           gh label create upstream-conflict --color B60205 --description "Upstream release needs a manual merge" 2>/dev/null || true
           {
-            echo "Upstream [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG) does not merge cleanly into \`main\`."
+            echo "Upstream [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG) does not merge cleanly into \`main\`, and the automatic resolution did not succeed."
             echo
             echo "Conflicted files:"
             echo
@@ -123,12 +182,14 @@ jobs:
             gh issue create --title "$title" --label upstream-conflict --body-file "$RUNNER_TEMP/issue.md"
           fi
 
-      - name: Push the sync branch
+      # The fork's CI scans history from the upstream tag, so the tag must exist in this repository.
+      - name: Push the upstream tag and the sync branch
         if: steps.git.outputs.conflict == 'false'
         env:
+          TAG: ${{ steps.find.outputs.tag }}
           BRANCH: ${{ steps.find.outputs.branch }}
         run: |
-          if ! git push --force origin "$BRANCH"; then
+          if ! git push origin "refs/tags/$TAG" || ! git push --force origin "$BRANCH"; then
             echo "::error::push refused. If upstream changed .github/workflows, set the SYNC_TOKEN secret (see the header of upstream-sync.yml)."
             exit 1
           fi
@@ -142,11 +203,30 @@ jobs:
           BRANCH: ${{ steps.find.outputs.branch }}
         run: |
           set -euo pipefail
+          {
+            echo "Merges upstream [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG). Checks: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID; the pull request is merged and released when they pass."
+            if [ -s "$RUNNER_TEMP/ai-files.txt" ]; then
+              echo
+              echo "Conflicts resolved by the model (review recommended):"
+              while read -r file; do echo "- \`$file\`"; done < "$RUNNER_TEMP/ai-files.txt"
+            fi
+            if [ -s "$RUNNER_TEMP/lock-files.txt" ]; then
+              echo
+              echo "Lock files taken from upstream and refreshed:"
+              while read -r file; do echo "- \`$file\`"; done < "$RUNNER_TEMP/lock-files.txt"
+            fi
+            if [ -s "$RUNNER_TEMP/locales.txt" ]; then
+              echo
+              echo "English fallback strings added:"
+              sed 's/^/- /' "$RUNNER_TEMP/locales.txt"
+            fi
+          } > "$RUNNER_TEMP/pr.md"
           number=$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number')
           if [ -z "$number" ]; then
-            body="Merges upstream [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG). Checks: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. Maintainer review, trial installation and explicit approval are required before merging or releasing."
-            gh pr create --base main --head "$BRANCH" --title "Merge upstream $TAG" --body "$body"
+            gh pr create --base main --head "$BRANCH" --title "Merge upstream $TAG" --body-file "$RUNNER_TEMP/pr.md"
             number=$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number')
+          else
+            gh pr edit "$number" --body-file "$RUNNER_TEMP/pr.md"
           fi
           echo "number=$number" >> "$GITHUB_OUTPUT"
 
@@ -158,3 +238,81 @@ jobs:
       ref: ${{ needs.merge.outputs.branch }}
     secrets:
       SCRUB_PATTERNS: ${{ secrets.SCRUB_PATTERNS }}
+
+  release:
+    needs: [merge, checks]
+    if: needs.merge.outputs.pr && (github.event_name == 'schedule' || inputs.release)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge the pull request
+        id: merged
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_TOKEN || secrets.GITHUB_TOKEN }}
+          PR: ${{ needs.merge.outputs.pr }}
+        run: |
+          gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --merge --delete-branch || {
+            echo "::error::merge refused. If upstream changed .github/workflows, set the SYNC_TOKEN secret."
+            exit 1
+          }
+          sha=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json mergeCommit -q .mergeCommit.oid)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Keep upstream workflows disabled and stop their runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ steps.merged.outputs.sha }}
+        run: |
+          gh workflow list --repo "$GITHUB_REPOSITORY" --all --json path,state \
+            -q '.[] | select(.state == "active") | .path' |
+          while read -r path; do
+            case "$(basename "$path")" in
+              remote-*|upstream-sync.yml) ;;
+              *) echo "disabling $path"; gh workflow disable "$(basename "$path")" --repo "$GITHUB_REPOSITORY" ;;
+            esac
+          done
+          sleep 15
+          gh run list --repo "$GITHUB_REPOSITORY" --commit "$SHA" --json databaseId,path,status \
+            -q '.[] | select(.status != "completed") | "\(.databaseId) \(.path)"' |
+          while read -r id path; do
+            case "$(basename "$path")" in
+              remote-*|upstream-sync.yml) ;;
+              *) echo "cancelling run $id ($path)"; gh run cancel "$id" --repo "$GITHUB_REPOSITORY" || true ;;
+            esac
+          done
+
+      - name: Start the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.merge.outputs.tag }}
+          SHA: ${{ steps.merged.outputs.sha }}
+        run: |
+          set -euo pipefail
+          base="${TAG#v}-remote"
+          last=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName -q '.[].tagName' |
+            sed -n "s/^v${base//./\\.}\.\([0-9]*\)$/\1/p" | sort -n | tail -n1)
+          version="$base.$(( ${last:-0} + 1 ))"
+          echo "releasing $version from $SHA"
+          gh workflow run remote-release.yml --repo "$GITHUB_REPOSITORY" -f version="$version" -f ref="$SHA" -f prerelease=false
+
+  report:
+    needs: [merge, checks, release]
+    if: always() && needs.merge.outputs.pr && (needs.checks.result == 'failure' || needs.release.result == 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open an issue for the failed sync
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.merge.outputs.tag }}
+          PR: ${{ needs.merge.outputs.pr }}
+          CHECKS: ${{ needs.checks.result }}
+        run: |
+          set -euo pipefail
+          gh label create upstream-conflict --color B60205 --description "Upstream release needs a manual merge" --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          if [ "$CHECKS" = "failure" ]; then what="the fork's checks failed on the merged result"; else what="merging the pull request or starting the release failed"; fi
+          body="Upstream $TAG merged into pull request #$PR, but $what, so nothing was released. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label upstream-conflict --search "$TAG in:title" --json number -q '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Upstream $TAG needs a manual merge" --label upstream-conflict --body "$body"
+          fi

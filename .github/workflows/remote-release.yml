@@ -1,7 +1,8 @@
 name: "remote release"
 # Builds the Windows installer of Handy Remote, signs the updater payload with the maintainer's
 # minisign key, and publishes a GitHub release with latest.json, the server zip and SHA256SUMS.
-# Manual trial builds only. Stable promotion requires a separate, explicit maintainer action.
+# Started by hand (a trial prerelease by default), or by upstream-sync.yml after an upstream release
+# has been merged and checked (a full release, which installed copies update to).
 on:
   workflow_dispatch:
     inputs:
@@ -13,6 +14,10 @@ on:
         description: "Branch or commit to build"
         type: string
         default: main
+      prerelease:
+        description: "Publish as a prerelease (installed copies do not update to it)"
+        type: boolean
+        default: true
 
 concurrency:
   group: remote-release
@@ -178,8 +183,11 @@ jobs:
 
       - name: Publish release
         shell: pwsh
+        env:
+          PRERELEASE: ${{ inputs.prerelease }}
         run: |
           $assets = Get-ChildItem dist-release -File | Where-Object Name -ne 'release-notes.md' | ForEach-Object FullName
+          $flags = if ($env:PRERELEASE -eq 'false') { @('--latest') } else { @('--prerelease', '--latest=false') }
           gh release create "v$env:VERSION" @assets --repo $env:GITHUB_REPOSITORY --target (git rev-parse HEAD) `
-            --title "Handy Remote $env:VERSION" --notes-file dist-release/release-notes.md --prerelease --latest=false
+            --title "Handy Remote $env:VERSION" --notes-file dist-release/release-notes.md @flags
           if ($LASTEXITCODE -ne 0) { throw "gh release create failed" }
