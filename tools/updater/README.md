@@ -19,7 +19,9 @@ powershell -ExecutionPolicy RemoteSigned -File tools\updater\Install-AutoUpdate.
 
 Each run:
 
-1. reads the latest release of `MusingZone/handy-remote` (set `GITHUB_TOKEN` for a private fork);
+1. reads the latest release of `MusingZone/handy-remote` (set `GITHUB_TOKEN` for a private fork); when the
+   GitHub API refuses an anonymous request (rate limit, common behind a shared proxy) it reads the release
+   from its `latest.json` and `SHA256SUMS.txt` downloads instead;
 2. downloads the `*_x64-setup.exe`, its `.sig` and `SHA256SUMS.txt`, and checks both the SHA-256 and the
    minisign signature against the app's updater public key (`Minisign.cs`, no external tools);
 3. waits until nobody has typed or clicked and Handy Remote has not logged anything for 2 minutes
