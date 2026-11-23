@@ -166,6 +166,24 @@ function Save-Asset($asset, [string]$dir) {
     return $out
 }
 
+# Release downloads are not rate limited like the API, whose anonymous quota shared proxy addresses often exhaust.
+# Lists the assets named in SHA256SUMS.txt; the installer is still checked against it and its minisign signature.
+function Get-ReleaseFromDownloads([string]$tag) {
+    $text = {
+        param($uri)
+        $c = (Invoke-WebRequest -Uri $uri -UseBasicParsing -Headers $headers).Content
+        if ($c -is [byte[]]) { [Text.Encoding]::UTF8.GetString($c) } else { $c }
+    }
+    if (-not $tag) { $tag = 'v' + ((& $text "https://github.com/$Repo/releases/latest/download/latest.json") | ConvertFrom-Json).version }
+    $base = "https://github.com/$Repo/releases/download/$tag"
+    $assets = @([pscustomobject]@{ name = 'SHA256SUMS.txt'; browser_download_url = "$base/SHA256SUMS.txt"; size = $null })
+    foreach ($m in [regex]::Matches((& $text "$base/SHA256SUMS.txt"), '(?m)^[0-9a-fA-F]{64}\s+\*?(\S[^\r\n]*?)\s*$')) {
+        $name = $m.Groups[1].Value
+        $assets += [pscustomobject]@{ name = $name; browser_download_url = "$base/$([uri]::EscapeDataString($name))"; size = $null }
+    }
+    [pscustomobject]@{ tag_name = $tag; assets = $assets }
+}
+
 function Test-Sha256([string]$file, [string]$sums) {
     $name = Split-Path $file -Leaf
     $line = Get-Content -LiteralPath $sums | Where-Object { $_ -match "^([0-9a-fA-F]{64})\s+\*?(.+)$" -and $Matches[2].Trim() -eq $name } | Select-Object -First 1
@@ -230,7 +248,14 @@ try {
     $headers = @{ 'User-Agent' = 'handy-remote-updater'; 'Accept' = 'application/vnd.github+json' }
     if ($env:GITHUB_TOKEN) { $headers.Authorization = "Bearer $($env:GITHUB_TOKEN)" }
     $releaseUri = if ($Version) { "https://api.github.com/repos/$Repo/releases/tags/v$($Version.TrimStart('v'))" } else { "https://api.github.com/repos/$Repo/releases/latest" }
-    $release = Invoke-RestMethod -Uri $releaseUri -Headers $headers -UseBasicParsing
+    try {
+        $release = Invoke-RestMethod -Uri $releaseUri -Headers $headers -UseBasicParsing
+    } catch {
+        $code = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
+        if ($code -ne 403 -and $code -ne 429) { throw }
+        Log "GitHub API refused the request ($code, rate limit); reading the release from its downloads"
+        $release = Get-ReleaseFromDownloads $(if ($Version) { "v$($Version.TrimStart('v'))" } else { '' })
+    }
     $latest = $release.tag_name.TrimStart('v')
     $inst = Get-Installed
     $current = if ($inst) { $inst.Version } else { $null }
