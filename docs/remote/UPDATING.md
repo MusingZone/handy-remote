@@ -88,10 +88,10 @@ Client and server talk a stable protocol: an older server keeps working with a n
 
 ## 4. Following upstream Handy
 
-Handy Remote tracks [upstream Handy](https://github.com/cjpais/Handy). New upstream releases are merged
-into a review branch by a manually started GitHub workflow. It opens a checked pull request but
-never merges or publishes automatically. Trial feedback and explicit approval are required before
-stable promotion. Releases are
+Handy Remote tracks [upstream Handy](https://github.com/cjpais/Handy). Every 6 hours a GitHub workflow
+checks for a new upstream release, merges it, runs the fork's full checks on the result and, when they
+pass, merges and publishes a release that installed copies update to. Merge conflicts are resolved
+with an AI model and accepted only if every check passes; otherwise an issue is opened. Releases are
 versioned `vX.Y.Z-remote.N`: `X.Y.Z` is the upstream Handy version they are based on, `N` counts the
 fork's releases on top of it.
 
@@ -100,8 +100,18 @@ fork's releases on top of it.
 | Workflow             | Runs                            | Does                                                                                                                                                          |
 | -------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `remote-ci.yml`      | pull requests, pushes to `main` | upstream lint and Rust tests, server and feedback tool tests (no models), Markdown links (`tools/ci/check_links.py`), scrub check (`tools/ci/scrub_check.py`) |
-| `remote-release.yml` | by hand only                    | first runs CI on the selected ref, then builds, signs, audits and publishes a **prerelease only**, never latest                                               |
-| `upstream-sync.yml`  | by hand only                    | prepares `sync/<tag>` and a checked pull request; no automatic merge or release; a conflict opens an issue labelled `upstream-conflict`                       |
+| `remote-release.yml` | by hand, or by upstream sync    | first runs CI on the selected ref, then builds, signs, audits and publishes; by hand a **prerelease** by default, from upstream sync a full (latest) release  |
+| `upstream-sync.yml`  | every 6 hours, or by hand       | merges a newer upstream release on `sync/<tag>`, runs CI, merges the pull request and starts the release; keeps upstream workflows disabled                   |
+
+How `upstream-sync.yml` finishes a merge without a maintainer (`tools/ci/sync_merge.py`):
+
+- conflict hunks are resolved one by one by a [GitHub Models](https://docs.github.com/en/github-models)
+  chat model through the workflow's own token (repository variable `SYNC_AI_MODEL`, default
+  `openai/gpt-4.1`); lock files take upstream's version and are refreshed;
+- keys that upstream locales lack (for example a new language) get the English text;
+- the merged result must pass the full `remote-ci.yml`, and the release workflow runs it again before
+  building. A conflict the model cannot resolve, or any failing check, opens an issue labelled
+  `upstream-conflict` and leaves `sync/<tag>` for a maintainer; nothing is released.
 
 Repository secrets (**Settings → Secrets and variables → Actions**):
 
@@ -113,13 +123,12 @@ Repository secrets (**Settings → Secrets and variables → Actions**):
 | `SCRUB_PATTERNS`                     | CI (optional)               | regular expressions, one per line, for private names and hosts that must never be committed. The matches are reported by file and line only                                                  |
 
 A trial release: **Actions → remote release → Run workflow**, version `X.Y.Z-remote.N`
-(`X.Y.Z` from `.upstream-version`) and the reviewed full commit SHA. The workflow can only create
-a prerelease; installed copies only follow the latest full release. Verify downloaded checksums,
-the installer signature and tamper rejection, then install the trial explicitly.
+(`X.Y.Z` from `.upstream-version`), the reviewed full commit SHA, and **prerelease** left on.
+Installed copies only follow the latest full release. Verify downloaded checksums, the installer
+signature and tamper rejection, then install the trial explicitly.
 
-**Stable promotion is a separate manual action, after the user has tried and approved that exact
-build.** Promote the existing verified assets; do not rebuild or publish a succession of trial
-fixes as stable releases. Do not enable unattended installation without the user's approval.
+Releases made by hand are tried and approved before they become a full release. Releases made by
+upstream sync are full releases once every check passes.
 
 Keep an offline copy of the signing key: without it, installed copies can no longer be updated.
 

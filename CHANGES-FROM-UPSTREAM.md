@@ -95,8 +95,9 @@ upstream Handy.
 - Upstream Handy's workflows stay in the tree, so upstream releases merge cleanly, but are disabled in
   this fork. The fork runs its own: `remote-ci.yml` (upstream lint and Rust tests, server and
   feedback tool tests, Markdown links, scrub check), `remote-release.yml` (signed Windows installer,
-  `latest.json`, server zip, `SHA256SUMS.txt`, **prerelease only**) and `upstream-sync.yml`
-  (manually prepares a checked pull request; never auto-merges or publishes).
+  `latest.json`, server zip, `SHA256SUMS.txt`; prerelease by hand, full release from upstream sync)
+  and `upstream-sync.yml` (every 6 hours merges a new upstream release, resolving conflicts with an
+  AI model, and merges and releases only when the fork's full checks pass).
   A release builds the exact commit that passed CI, audits installed contents and scans source,
   history, notes and packaged assets before publishing.
   See [UPDATING.md](docs/remote/UPDATING.md#5-for-maintainers-workflows-and-secrets).
