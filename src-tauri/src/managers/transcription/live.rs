@@ -177,6 +177,7 @@ impl<'a> StreamSession<'a> {
                     perf.record_emit();
                     let (committed, tentative) =
                         preview_script.convert(&text.committed, &text.tentative);
+                    crate::incremental_paste::committed(&committed);
                     emit_stream_text(&app_handle, &committed, &tentative);
                 }
                 perf.maybe_log();

@@ -10,7 +10,13 @@
     "secureInputWarning": "⚠ Phím tắt bị Secure Input chặn",
     "language": "Ngôn ngữ",
     "autoLanguage": "Tự động",
-    "otherLanguages": "Ngôn ngữ khác"
+    "otherLanguages": "Ngôn ngữ khác",
+    "voiceReview": "● Xem gợi ý ({count} đang chờ)",
+    "voiceAnalyzing": "Đang phân tích phản hồi của bạn…",
+    "voiceNoPending": "Không có gợi ý đang chờ",
+    "voiceTooltipPending": "{count} gợi ý đọc chính tả đang chờ (nhấp vào biểu tượng)",
+    "voiceReport": "Báo cáo lần đọc chính tả gần nhất…",
+    "voiceGuide": "Hướng dẫn phản hồi đọc chính tả"
   },
   "sidebar": {
     "general": "Chung",
@@ -19,7 +25,9 @@
     "postProcessing": "Xử lý sau",
     "history": "Lịch sử",
     "debug": "Gỡ lỗi",
-    "about": "Giới thiệu"
+    "about": "Giới thiệu",
+    "remote": "Từ xa",
+    "cloud": "Cloud"
   },
   "onboarding": {
     "customModelDescription": "Không được hỗ trợ chính thức",
@@ -144,6 +152,7 @@
       },
       "model": "Mô hình",
       "showAll": "Hiển thị cả {{count}} mô hình",
+      "useServer": "Tôi có máy chủ Handy Remote",
       "download": "Tải xuống {{size}}",
       "downloadInstead": "Tải xuống {{size}} thay thế",
       "pauses": "{{name}} tạm dừng ở {{percent}}%",
@@ -666,6 +675,52 @@
           "placeholderWithOptions": "Tìm kiếm hoặc chọn một mô hình",
           "placeholderNoOptions": "Nhập tên mô hình",
           "refreshModels": "Làm mới mô hình"
+        },
+        "endpoint": {
+          "import": "Import endpoints",
+          "imported": "Imported {{count}} endpoints",
+          "importFailed": "Could not import endpoints",
+          "auth": "Authentication",
+          "authDescription": "Send only the selected authentication header. Automatic uses Bearer for OpenAI and x-api-key for Anthropic.",
+          "authFailed": "Could not save authentication",
+          "authOptions": {
+            "auto": "Automatic",
+            "bearer": "Bearer token",
+            "api_key": "api-key header",
+            "none": "None"
+          }
+        }
+      },
+      "refine": {
+        "title": "Refine with a language model",
+        "always": {
+          "label": "Refine every dictation",
+          "description": "Send every dictation through the model and prompt above before it is pasted, not only the post-processing shortcut. Live pasting while you speak is turned off, and pasting waits for the model."
+        },
+        "detect": {
+          "label": "Local models",
+          "description": "Find language model servers running on this computer (Ollama, LM Studio, llama.cpp, Foundry Local, OpenVINO Model Server, Lemonade) and the Copilot bridge. Text stays on this computer, except through the Copilot bridge, which passes it to GitHub Copilot.",
+          "button": "Find local models",
+          "running": "Searching…",
+          "none": "No local model server answered. Start one (for example Ollama with a small instruct model such as qwen2.5:3b) and search again.",
+          "recommended": "recommended",
+          "use": "Use"
+        },
+        "benchmark": {
+          "label": "Speed test",
+          "description": "Run the selected provider, model and prompt on a sample dictation (one warm-up, then three timed runs) and show the result.",
+          "button": "Run speed test",
+          "running": "Testing…",
+          "result": "{{model}}: median {{ms}} ms ({{runs}} ms)"
+        },
+        "rules": {
+          "label": "My rules",
+          "description": "Your own instructions for the model, one per line, such as how to write floors, numbers or product names. They are added to the selected prompt for every dictation and take priority over its rules. Lines starting with # are comments. The file is read on every dictation, so you can also edit it in any editor or keep it in a synced folder. Your custom words are always kept exactly as written.",
+          "placeholder": "# One rule per line, for example:\nWrite floors as digits: 三楼 → 3楼\nAlways write \"Copilot\" with a capital C",
+          "save": "Save rules",
+          "saved": "Saved, {{count}} rules in use.",
+          "file": "Rules file",
+          "useFile": "Use this file"
         }
       },
       "prompts": {
@@ -898,6 +953,139 @@
           "details": "Handy sử dụng ggml để xử lý chuyển đổi giọng nói thành văn bản nhanh, cục bộ. Cảm ơn công việc tuyệt vời của Georgi Gerganov và các cộng tác viên."
         }
       }
+    },
+    "remote": {
+      "intro": "Chạy nhận dạng trên máy chủ Handy Remote, ví dụ một máy tính mạnh hơn trong mạng, kết nối qua SSH. Khi bật, các mô hình cục bộ không được dùng.",
+      "guide": "Hướng dẫn cài đặt",
+      "groups": {
+        "recognition": "Nhận dạng",
+        "connection": "Kết nối",
+        "key": "Khóa truy cập"
+      },
+      "enabled": {
+        "label": "Dùng máy chủ từ xa",
+        "description": "Giọng nói được nhận dạng trên máy chủ bên dưới thay vì trên máy tính này."
+      },
+      "incremental_paste": {
+        "label": "Dán trong khi nói",
+        "description": "Dán từng câu đã xong ngay khi vẫn đang ghi âm."
+      },
+      "rdp_caret": {
+        "label": "Theo con trỏ trong Remote Desktop",
+        "description": "Khi cửa sổ Remote Desktop ở phía trước, lớp phủ hiển thị dưới con trỏ của ứng dụng bên trong. Cần trình trợ giúp con trỏ trên máy chủ."
+      },
+      "rdp_dictation": {
+        "label": "Đọc chính tả trong Máy tính Từ xa",
+        "description": "Khi cửa sổ Máy tính Từ xa ở phía trước, phím tắt đọc chính tả sẽ khởi động Handy trong phiên từ xa, ứng dụng này ghi âm micrô được chuyển hướng và dán văn bản tại đó. Cần trình trợ giúp con trỏ trên máy chủ; nếu không sẽ đọc chính tả tại đây."
+      },
+      "pairing": {
+        "label": "Mã ghép nối",
+        "description": "Dán mã do \"doctor.py pair\" in ra trên máy chủ để điền các trường bên dưới.",
+        "apply": "Áp dụng",
+        "applied": "Đã điền từ mã ghép nối. Hãy kiểm tra rồi lưu.",
+        "invalid": "Mã ghép nối không hợp lệ: {{error}}"
+      },
+      "host": {
+        "label": "Máy chủ",
+        "description": "Tên máy hoặc địa chỉ của máy chủ. Dùng localhost nếu máy chủ chạy trên máy tính này."
+      },
+      "user": {
+        "label": "Người dùng SSH",
+        "description": "Tài khoản đăng nhập vào máy chủ."
+      },
+      "ssh_port": {
+        "label": "Cổng SSH",
+        "description": "Cổng SSH của máy chủ, thường là 22."
+      },
+      "server_port": {
+        "label": "Cổng máy chủ",
+        "description": "Cổng mà máy chủ nhận dạng lắng nghe, trên chính máy chủ."
+      },
+      "caret_port": {
+        "label": "Cổng trình trợ giúp con trỏ",
+        "description": "Cổng của trình trợ giúp con trỏ trên máy chủ."
+      },
+      "identity_file": {
+        "label": "Tệp khóa SSH",
+        "description": "Khóa riêng để đăng nhập. Để trống: dùng khóa riêng của ứng dụng này nếu có, nếu không dùng mặc định của SSH."
+      },
+      "ssh_path": {
+        "label": "Chương trình ssh",
+        "description": "Đường dẫn tới ssh. Để trống: tự động tìm.",
+        "missing": "Không tìm thấy ssh"
+      },
+      "host_key": {
+        "label": "Khóa máy chủ",
+        "description": "Khóa máy chủ SSH lấy từ mã ghép nối. Khi đã đặt, máy chủ có khóa khác sẽ bị từ chối.",
+        "none": "Chưa cố định",
+        "clear": "Xóa"
+      },
+      "client_key": {
+        "label": "Khóa của máy tính này",
+        "description": "Cấp quyền cho khóa này một lần: chạy lệnh bên dưới trong thư mục của máy chủ.",
+        "none": "Chưa có khóa.",
+        "create": "Tạo khóa",
+        "copy": "Sao chép lệnh",
+        "copied": "Đã sao chép"
+      },
+      "test": {
+        "button": "Kiểm tra kết nối",
+        "running": "Đang kiểm tra…",
+        "connected": "Kết nối trong {{connect}} ms; máy chủ trả lời trong {{roundTrip}} ms.",
+        "oldServer": "Máy chủ là phiên bản cũ và không cung cấp chi tiết.",
+        "loaded": "Các mô hình đã được tải.",
+        "sleeping": "Các mô hình đã được giải phóng; sẽ tải lại ở lần đọc đầu tiên (vài giây).",
+        "failed": "Kết nối thất bại: {{error}}"
+      },
+      "save": "Lưu",
+      "revert": "Hoàn tác",
+      "saved": "Đã lưu.",
+      "automatic": "Tự động"
+    },
+    "cloudAsr": {
+      "intro": "Recognize speech with a public cloud speech-to-text service of your choice (OpenAI, Azure, Google, Deepgram, AssemblyAI, ElevenLabs, Groq, Mistral, Alibaba Qwen3-ASR, SiliconFlow, or any OpenAI-compatible server). Each recording is uploaded once when it ends; there is no live preview.",
+      "privacy": "Your audio leaves this computer and is processed under the provider's terms. API keys are stored only in this computer's settings.",
+      "saved": "Saved.",
+      "save": "Save",
+      "revert": "Revert",
+      "groups": {
+        "recognition": "Recognition",
+        "service": "Service"
+      },
+      "enabled": {
+        "label": "Use cloud recognition",
+        "description": "Send dictation to the service below instead of recognizing on this computer or a remote server."
+      },
+      "provider": {
+        "label": "Provider",
+        "description": "Endpoint, model and key are remembered per provider."
+      },
+      "base_url": {
+        "label": "Endpoint",
+        "description": "Leave empty for the default. Change it for another region, a proxy, or a compatible server."
+      },
+      "model": {
+        "label": "Model",
+        "description": "Leave empty for the default model."
+      },
+      "api_key": {
+        "label": "API key",
+        "description": "Required by this provider.",
+        "optional": "Optional: only if your server asks for one.",
+        "placeholder": "Paste the key",
+        "saved": "Saved (type to replace)",
+        "get": "Get a key"
+      },
+      "timeout": {
+        "label": "Timeout (s)",
+        "description": "Longest wait for one recognition, upload included."
+      },
+      "test": {
+        "button": "Test",
+        "running": "Sending a one-second test sound…",
+        "failed": "Test failed: {{error}}",
+        "ok": "Works: answered in {{ms}} ms (recognized: {{text}})."
+      }
     }
   },
   "footer": {
@@ -982,7 +1170,11 @@
   "overlay": {
     "transcribing": "Đang chuyển đổi...",
     "processing": "Đang xử lý...",
-    "loadingModel": "Đang tải mô hình..."
+    "loadingModel": "Đang tải mô hình...",
+    "remoteWaking": "Đang đánh thức các mô hình trên máy chủ…",
+    "speakNow": "Hãy nói",
+    "refineOn": "Sẽ trau chuốt lần đọc này · bấm để bỏ qua",
+    "refineOff": "Không trau chuốt lần đọc này · bấm để bật lại"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} có thể đang chặn 1 phím tắt",

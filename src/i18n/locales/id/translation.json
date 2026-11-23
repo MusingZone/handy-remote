@@ -10,7 +10,13 @@
     "secureInputWarning": "⚠ Pintasan diblokir oleh Secure Input",
     "language": "Bahasa",
     "autoLanguage": "Otomatis",
-    "otherLanguages": "Bahasa Lain"
+    "otherLanguages": "Bahasa Lain",
+    "voiceReview": "● Tinjau saran ({count} menunggu)",
+    "voiceAnalyzing": "Menganalisis masukan Anda…",
+    "voiceNoPending": "Tidak ada saran yang menunggu",
+    "voiceTooltipPending": "{count} saran dikte menunggu (klik ikon)",
+    "voiceReport": "Laporkan dikte terakhir…",
+    "voiceGuide": "Panduan masukan dikte"
   },
   "sidebar": {
     "general": "Umum",
@@ -19,7 +25,9 @@
     "postProcessing": "Pascaproses",
     "history": "Riwayat",
     "debug": "Debug",
-    "about": "Tentang"
+    "about": "Tentang",
+    "remote": "Jarak jauh",
+    "cloud": "Cloud"
   },
   "onboarding": {
     "customModelDescription": "Tidak didukung secara resmi",
@@ -144,6 +152,7 @@
       },
       "model": "Model",
       "showAll": "Tampilkan semua {{count}} model",
+      "useServer": "Saya punya server Handy Remote",
       "download": "Unduh {{size}}",
       "downloadInstead": "Unduh {{size}} saja",
       "pauses": "{{name}} berhenti sejenak di {{percent}}%",
@@ -666,6 +675,52 @@
           "placeholderWithOptions": "Cari atau pilih model",
           "placeholderNoOptions": "Ketik nama model",
           "refreshModels": "Segarkan model"
+        },
+        "endpoint": {
+          "import": "Import endpoints",
+          "imported": "Imported {{count}} endpoints",
+          "importFailed": "Could not import endpoints",
+          "auth": "Authentication",
+          "authDescription": "Send only the selected authentication header. Automatic uses Bearer for OpenAI and x-api-key for Anthropic.",
+          "authFailed": "Could not save authentication",
+          "authOptions": {
+            "auto": "Automatic",
+            "bearer": "Bearer token",
+            "api_key": "api-key header",
+            "none": "None"
+          }
+        }
+      },
+      "refine": {
+        "title": "Refine with a language model",
+        "always": {
+          "label": "Refine every dictation",
+          "description": "Send every dictation through the model and prompt above before it is pasted, not only the post-processing shortcut. Live pasting while you speak is turned off, and pasting waits for the model."
+        },
+        "detect": {
+          "label": "Local models",
+          "description": "Find language model servers running on this computer (Ollama, LM Studio, llama.cpp, Foundry Local, OpenVINO Model Server, Lemonade) and the Copilot bridge. Text stays on this computer, except through the Copilot bridge, which passes it to GitHub Copilot.",
+          "button": "Find local models",
+          "running": "Searching…",
+          "none": "No local model server answered. Start one (for example Ollama with a small instruct model such as qwen2.5:3b) and search again.",
+          "recommended": "recommended",
+          "use": "Use"
+        },
+        "benchmark": {
+          "label": "Speed test",
+          "description": "Run the selected provider, model and prompt on a sample dictation (one warm-up, then three timed runs) and show the result.",
+          "button": "Run speed test",
+          "running": "Testing…",
+          "result": "{{model}}: median {{ms}} ms ({{runs}} ms)"
+        },
+        "rules": {
+          "label": "My rules",
+          "description": "Your own instructions for the model, one per line, such as how to write floors, numbers or product names. They are added to the selected prompt for every dictation and take priority over its rules. Lines starting with # are comments. The file is read on every dictation, so you can also edit it in any editor or keep it in a synced folder. Your custom words are always kept exactly as written.",
+          "placeholder": "# One rule per line, for example:\nWrite floors as digits: 三楼 → 3楼\nAlways write \"Copilot\" with a capital C",
+          "save": "Save rules",
+          "saved": "Saved, {{count}} rules in use.",
+          "file": "Rules file",
+          "useFile": "Use this file"
         }
       },
       "prompts": {
@@ -898,6 +953,139 @@
           "details": "Fitur ucapan-ke-teks lokal Handy dibangun menggunakan transcribe.cpp dan ggml. Terima kasih kepada Georgi Gerganov dan para kontributor atas karya luar biasa mereka."
         }
       }
+    },
+    "remote": {
+      "intro": "Jalankan pengenalan di server Handy Remote, misalnya komputer yang lebih kuat di jaringan Anda, melalui SSH. Selama aktif, model lokal tidak digunakan.",
+      "guide": "Panduan penyiapan",
+      "groups": {
+        "recognition": "Pengenalan",
+        "connection": "Koneksi",
+        "key": "Kunci akses"
+      },
+      "enabled": {
+        "label": "Gunakan server jarak jauh",
+        "description": "Dikte dikenali di server di bawah, bukan di komputer ini."
+      },
+      "incremental_paste": {
+        "label": "Tempel sambil berbicara",
+        "description": "Menempelkan setiap kalimat yang selesai saat masih merekam."
+      },
+      "rdp_caret": {
+        "label": "Ikuti kursor di Remote Desktop",
+        "description": "Saat jendela Remote Desktop di depan, overlay tampil di bawah kursor aplikasi di dalamnya. Memerlukan pembantu kursor di server."
+      },
+      "rdp_dictation": {
+        "label": "Dikte di dalam Desktop Jarak Jauh",
+        "description": "Saat jendela Desktop Jarak Jauh di depan, pintasan dikte menjalankan Handy di sesi jarak jauh, yang merekam mikrofon yang dialihkan dan menempelkan teks di sana. Memerlukan pembantu kursor di server; jika tidak, dikte dilakukan di sini."
+      },
+      "pairing": {
+        "label": "Kode pemasangan",
+        "description": "Tempel kode yang dicetak \"doctor.py pair\" di server untuk mengisi kolom di bawah.",
+        "apply": "Terapkan",
+        "applied": "Diisi dari kode pemasangan. Uji, lalu simpan.",
+        "invalid": "Kode pemasangan tidak valid: {{error}}"
+      },
+      "host": {
+        "label": "Server",
+        "description": "Nama host atau alamat server. Gunakan localhost jika server berjalan di komputer ini."
+      },
+      "user": {
+        "label": "Pengguna SSH",
+        "description": "Akun untuk masuk ke server."
+      },
+      "ssh_port": {
+        "label": "Port SSH",
+        "description": "Port SSH server, biasanya 22."
+      },
+      "server_port": {
+        "label": "Port server",
+        "description": "Port yang didengarkan server pengenalan, di server itu sendiri."
+      },
+      "caret_port": {
+        "label": "Port pembantu kursor",
+        "description": "Port pembantu kursor di server."
+      },
+      "identity_file": {
+        "label": "File kunci SSH",
+        "description": "Kunci privat untuk masuk. Kosong: kunci milik aplikasi ini jika ada, jika tidak bawaan SSH."
+      },
+      "ssh_path": {
+        "label": "Program ssh",
+        "description": "Jalur ke ssh. Kosong: dideteksi otomatis.",
+        "missing": "ssh tidak ditemukan"
+      },
+      "host_key": {
+        "label": "Kunci server",
+        "description": "Kunci host SSH server dari kode pemasangan. Jika diatur, server dengan kunci lain akan ditolak.",
+        "none": "Tidak disematkan",
+        "clear": "Hapus"
+      },
+      "client_key": {
+        "label": "Kunci komputer ini",
+        "description": "Otorisasi kunci ini sekali: jalankan perintah di bawah di folder server.",
+        "none": "Belum ada kunci.",
+        "create": "Buat kunci",
+        "copy": "Salin perintah",
+        "copied": "Disalin"
+      },
+      "test": {
+        "button": "Uji koneksi",
+        "running": "Menguji…",
+        "connected": "Terhubung dalam {{connect}} ms; server menjawab dalam {{roundTrip}} ms.",
+        "oldServer": "Server versi lama dan tidak memberi detail.",
+        "loaded": "Model sudah dimuat.",
+        "sleeping": "Model sedang dilepas; akan dimuat pada dikte pertama (beberapa detik).",
+        "failed": "Koneksi gagal: {{error}}"
+      },
+      "save": "Simpan",
+      "revert": "Kembalikan",
+      "saved": "Tersimpan.",
+      "automatic": "Otomatis"
+    },
+    "cloudAsr": {
+      "intro": "Recognize speech with a public cloud speech-to-text service of your choice (OpenAI, Azure, Google, Deepgram, AssemblyAI, ElevenLabs, Groq, Mistral, Alibaba Qwen3-ASR, SiliconFlow, or any OpenAI-compatible server). Each recording is uploaded once when it ends; there is no live preview.",
+      "privacy": "Your audio leaves this computer and is processed under the provider's terms. API keys are stored only in this computer's settings.",
+      "saved": "Saved.",
+      "save": "Save",
+      "revert": "Revert",
+      "groups": {
+        "recognition": "Recognition",
+        "service": "Service"
+      },
+      "enabled": {
+        "label": "Use cloud recognition",
+        "description": "Send dictation to the service below instead of recognizing on this computer or a remote server."
+      },
+      "provider": {
+        "label": "Provider",
+        "description": "Endpoint, model and key are remembered per provider."
+      },
+      "base_url": {
+        "label": "Endpoint",
+        "description": "Leave empty for the default. Change it for another region, a proxy, or a compatible server."
+      },
+      "model": {
+        "label": "Model",
+        "description": "Leave empty for the default model."
+      },
+      "api_key": {
+        "label": "API key",
+        "description": "Required by this provider.",
+        "optional": "Optional: only if your server asks for one.",
+        "placeholder": "Paste the key",
+        "saved": "Saved (type to replace)",
+        "get": "Get a key"
+      },
+      "timeout": {
+        "label": "Timeout (s)",
+        "description": "Longest wait for one recognition, upload included."
+      },
+      "test": {
+        "button": "Test",
+        "running": "Sending a one-second test sound…",
+        "failed": "Test failed: {{error}}",
+        "ok": "Works: answered in {{ms}} ms (recognized: {{text}})."
+      }
     }
   },
   "footer": {
@@ -982,7 +1170,11 @@
   "overlay": {
     "transcribing": "Mentranskripsikan...",
     "processing": "Memproses...",
-    "loadingModel": "Memuat model..."
+    "loadingModel": "Memuat model...",
+    "remoteWaking": "Membangunkan model di server…",
+    "speakNow": "Silakan bicara",
+    "refineOn": "Dikte ini akan dirapikan · klik untuk melewati",
+    "refineOff": "Dikte ini tidak dirapikan · klik untuk merapikan"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} mungkin memblokir 1 pintasan",

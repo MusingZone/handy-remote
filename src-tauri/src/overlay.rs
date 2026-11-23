@@ -355,6 +355,90 @@ fn windows_overlay_bounds(
     (x, y, width, height)
 }
 
+/// Fork: longest wait for a caret lookup on the UI thread.
+#[cfg(target_os = "windows")]
+const CARET_TIMEOUT: Duration = Duration::from_millis(150);
+/// Fork: logical gap between the caret and the card, and how far the card starts left of the caret.
+#[cfg(target_os = "windows")]
+const CARET_GAP: f64 = 8.0;
+#[cfg(target_os = "windows")]
+const CARET_INDENT: f64 = 16.0;
+
+/// Fork: overlay bounds just under the caret (or above it when the work area has no room below),
+/// clamped to the work area of the caret's monitor. The bool is true when the card hangs below.
+#[cfg(target_os = "windows")]
+fn caret_overlay_bounds(
+    app_handle: &AppHandle,
+    c: crate::caret::Caret,
+    text_scale: f64,
+    logical_width: f64,
+    logical_height: f64,
+) -> Option<(i32, i32, i32, i32, bool)> {
+    let cy = (c.top + c.bottom) / 2;
+    let monitor = app_handle
+        .available_monitors()
+        .ok()?
+        .into_iter()
+        .find(|m| {
+            let (p, s) = (m.position(), m.size());
+            c.left >= p.x
+                && c.left < p.x + s.width as i32
+                && cy >= p.y
+                && cy < p.y + s.height as i32
+        })?;
+    let scale = monitor.scale_factor();
+    let wa = monitor.work_area();
+    let (wl, wt) = (wa.position.x, wa.position.y);
+    let (wr, wb) = (wl + wa.size.width as i32, wt + wa.size.height as i32);
+    let content_scale = scale * text_scale;
+    let width = (logical_width * content_scale).round().max(1.0) as i32;
+    let height = (logical_height * content_scale).round().max(1.0) as i32;
+    let gap = (CARET_GAP * scale).round() as i32;
+    let x = (c.left - (CARET_INDENT * scale).round() as i32).clamp(wl, (wr - width).max(wl));
+    let below = c.bottom + gap + height <= wb;
+    let y = if below {
+        c.bottom + gap
+    } else {
+        (c.top - gap - height).max(wt)
+    };
+    Some((x, y, width, height, below))
+}
+
+/// Fork: while a session shows, re-place the overlay when the caret changes line or leaves the
+/// card's span (incremental paste moves it). Ends when the overlay hides or is shown again.
+#[cfg(target_os = "windows")]
+fn follow_caret(app_handle: &AppHandle) {
+    if !crate::caret::enabled()
+        || !matches!(
+            settings::get_settings(app_handle).overlay_position,
+            OverlayPosition::Bottom
+        )
+    {
+        return;
+    }
+    let app = app_handle.clone();
+    let generation = OVERLAY_SHOW_GENERATION.load(Ordering::SeqCst);
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_millis(400));
+        if OVERLAY_SHOW_GENERATION.load(Ordering::SeqCst) != generation
+            || !OVERLAY_SESSION_SHOWING.load(Ordering::SeqCst)
+        {
+            return;
+        }
+        let Some(c) = crate::caret::locate(CARET_TIMEOUT) else {
+            continue;
+        };
+        let span = app
+            .get_webview_window("recording_overlay")
+            .and_then(|w| w.outer_position().ok().zip(w.outer_size().ok()))
+            .map(|(p, s)| (p.x, p.x + s.width as i32))
+            .unwrap_or((i32::MIN, i32::MAX));
+        if crate::caret::moved(c, crate::caret::placed(), span.0, span.1) {
+            update_overlay_position(&app);
+        }
+    });
+}
+
 /// Moves and sizes the overlay in one native SetWindowPos, bypassing tao's
 /// current-DPI logical conversion that mislands cross-monitor moves.
 #[cfg(target_os = "windows")]
@@ -366,9 +450,47 @@ fn place_windows_overlay(
 ) -> Result<(), String> {
     use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER};
 
+    let overlay_position = settings::get_settings(app_handle).overlay_position;
+    let text_scale = windows_text_scale_factor();
+    let hwnd = overlay_window
+        .hwnd()
+        .map_err(|error| format!("failed to get overlay window handle: {error}"))?;
+
+    // Fork: the Bottom setting follows the text caret like an IME candidate window (screen edge
+    // when the app exposes no caret). During a session the last caret stands in for a missed read.
+    if matches!(overlay_position, OverlayPosition::Bottom) && crate::caret::enabled() {
+        let caret = crate::caret::locate(CARET_TIMEOUT).or_else(crate::caret::placed);
+        if let Some((c, (x, y, width, height, below))) = caret.and_then(|c| {
+            caret_overlay_bounds(app_handle, c, text_scale, logical_width, logical_height)
+                .map(|b| (c, b))
+        }) {
+            unsafe {
+                SetWindowPos(
+                    hwnd,
+                    None,
+                    x,
+                    y,
+                    width,
+                    height,
+                    SWP_NOACTIVATE | SWP_NOZORDER,
+                )
+                .map_err(|error| format!("failed to set overlay bounds: {error}"))?;
+            }
+            crate::caret::remember(Some(c));
+            let _ = overlay_window.emit("overlay-anchor", if below { "top" } else { "bottom" });
+            log::debug!(
+                "windows overlay at caret {:?}: x={} y={} below={}",
+                c,
+                x,
+                y,
+                below
+            );
+            return Ok(());
+        }
+    }
+
     let monitor = get_monitor_with_cursor(app_handle)
         .ok_or_else(|| "failed to determine the monitor containing the cursor".to_string())?;
-    let text_scale = windows_text_scale_factor();
     let (x, y, width, height) = windows_overlay_bounds(
         *monitor.position(),
         *monitor.size(),
@@ -376,11 +498,16 @@ fn place_windows_overlay(
         text_scale,
         logical_width,
         logical_height,
-        settings::get_settings(app_handle).overlay_position,
+        overlay_position,
     );
-    let hwnd = overlay_window
-        .hwnd()
-        .map_err(|error| format!("failed to get overlay window handle: {error}"))?;
+    let _ = overlay_window.emit(
+        "overlay-anchor",
+        if matches!(overlay_position, OverlayPosition::Top) {
+            "top"
+        } else {
+            "bottom"
+        },
+    );
 
     unsafe {
         SetWindowPos(
@@ -618,6 +745,8 @@ fn show_overlay_state_on_main(app_handle: &AppHandle, state: &str) {
             if let Err(error) = place_windows_overlay(app_handle, &overlay_window, width, height) {
                 log::error!("Failed to re-assert recording overlay position: {error}");
             }
+            #[cfg(target_os = "windows")]
+            follow_caret(app_handle);
 
             log::debug!(
                 "overlay '{}': set_size={:?} pos_calc={:?} set_pos={:?} show={:?}",
@@ -781,6 +910,8 @@ static OVERLAY_SESSION_LIVE: AtomicBool = AtomicBool::new(false);
 pub fn hide_recording_overlay(app_handle: &AppHandle) {
     OVERLAY_SESSION_SHOWING.store(false, Ordering::SeqCst);
     OVERLAY_SESSION_LIVE.store(false, Ordering::SeqCst);
+    #[cfg(target_os = "windows")]
+    crate::caret::remember(None);
     // Always hide the overlay regardless of settings - if setting was changed while recording,
     // we still want to hide it properly
     if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {

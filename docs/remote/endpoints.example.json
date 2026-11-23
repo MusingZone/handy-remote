@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "endpoints": [
+    {
+      "id": "custom_primary",
+      "label": "Primary endpoint",
+      "base_url": "https://api.example.com/v1",
+      "api_format": "openai",
+      "auth": "bearer",
+      "model": "small-instruct"
+    },
+    {
+      "id": "custom_local",
+      "label": "Local server",
+      "base_url": "http://localhost:8080/v1",
+      "auth": "none"
+    }
+  ]
+}

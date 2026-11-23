@@ -45,3 +45,18 @@ result
 
 # Python bytecode (scripts/)
 __pycache__/
+
+# Machine-local settings and credentials; only sanitized examples belong in source control.
+.env
+.env.*
+!.env.example
+settings_store.json
+remote_worker.json
+remote_connection.json
+endpoints.json
+endpoints.*.json
+!endpoints.example.json
+feedback.toml
+config.toml
+lexicon.json
+dist-release/

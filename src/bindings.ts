@@ -5,6 +5,126 @@
 
 
 export const commands = {
+/**
+ * Save the remote settings and switch recognition over (or back to the local engine).
+ */
+async changeRemoteSettings(remote: RemoteSettings) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_remote_settings", { remote }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async remoteApplyPairing(remote: RemoteSettings, code: string) : Promise<Result<RemoteSettings, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("remote_apply_pairing", { remote, code }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async remoteTestConnection(remote: RemoteSettings) : Promise<Result<RemoteTestResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("remote_test_connection", { remote }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The SSH public key to authorize on the server (`doctor.py authorize "<key>"`).
+ */
+async remoteClientKey(remote: RemoteSettings, create: boolean) : Promise<Result<string | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("remote_client_key", { remote, create }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async remoteDetectSsh() : Promise<string | null> {
+    return await TAURI_INVOKE("remote_detect_ssh");
+},
+async cloudAsrProviders() : Promise<CloudAsrProvider[]> {
+    return await TAURI_INVOKE("cloud_asr_providers");
+},
+/**
+ * Save the cloud settings and, with `api_key`, the key of the selected provider; switch
+ * recognition over (or back).
+ */
+async changeCloudAsrSettings(cloud: CloudAsrSettings, apiKey: string | null) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_cloud_asr_settings", { cloud, apiKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Recognize a short generated sound with unsaved settings: checks the endpoint and the key.
+ */
+async cloudAsrTest(cloud: CloudAsrSettings, apiKey: string | null) : Promise<Result<CloudAsrTestResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cloud_asr_test", { cloud, apiKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Running local LLM servers, with the model recommended for dictation.
+ */
+async refineDetectLocalLlms() : Promise<LocalLlmEndpoint[]> {
+    return await TAURI_INVOKE("refine_detect_local_llms");
+},
+async refineRulesGet() : Promise<Result<RefineRules, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("refine_rules_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async refineRulesSet(text: string) : Promise<Result<RefineRules, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("refine_rules_set", { text }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Use another rules file (for example one in a synced folder); empty for the default.
+ */
+async changeRefineRulesFileSetting(path: string) : Promise<Result<RefineRules, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_refine_rules_file_setting", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Time the selected provider, model and prompt on a sample dictation: one warm-up (which may load
+ * the model), then `rounds` timed runs.
+ */
+async refineBenchmark(rounds: number | null) : Promise<Result<RefineBenchmark, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("refine_benchmark", { rounds }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async changePostProcessAlwaysSetting(enabled: boolean) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_post_process_always_setting", { enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async changeBinding(id: string, binding: string) : Promise<Result<BindingResponse, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("change_binding", { id, binding }) };
@@ -267,6 +387,25 @@ async changePostProcessBaseUrlSetting(providerId: string, baseUrl: string) : Pro
 async changePostProcessApiFormatSetting(providerId: string, apiFormat: PostProcessApiFormat) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("change_post_process_api_format_setting", { providerId, apiFormat }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async changePostProcessAuthSetting(providerId: string, auth: PostProcessAuth) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_post_process_auth_setting", { providerId, auth }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Imports non-secret endpoint definitions; existing keys and the active selection stay local.
+ */
+async importPostProcessEndpoints(path: string) : Promise<Result<number, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("import_post_process_endpoints", { path }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -569,6 +708,12 @@ async showMainWindowCommand() : Promise<Result<null, string>> {
 },
 async cancelOperation() : Promise<void> {
     await TAURI_INVOKE("cancel_operation");
+},
+/**
+ * Fork: the overlay's refine switch, for the dictation in progress only.
+ */
+async setRefineSkipped(skip: boolean) : Promise<void> {
+    await TAURI_INVOKE("set_refine_skipped", { skip });
 },
 async isPortable() : Promise<boolean> {
     return await TAURI_INVOKE("is_portable");
@@ -1038,10 +1183,8 @@ async updateRecordingRetentionPeriod(period: string) : Promise<Result<null, stri
 }
 },
 /**
- * Checks if the Mac is a laptop by detecting battery presence
- * 
- * This uses pmset to check for battery information.
- * Returns true if a battery is detected (laptop), false otherwise (desktop)
+ * Stub implementation for non-macOS platforms
+ * Always returns false since laptop detection is macOS-specific
  */
 async isLaptop() : Promise<Result<boolean, string>> {
     try {
@@ -1185,7 +1328,33 @@ language_detection_window_secs?: number;
  * not gated on this — that follows model capability. Migrated from the old
  * `overlay_position` (position `none` → style `None`).
  */
-overlay_style?: OverlayStyle }
+overlay_style?: OverlayStyle; 
+/**
+ * Fork: recognition on a Handy Remote server (see `remote.rs`).
+ */
+remote?: RemoteSettings; 
+/**
+ * Fork: recognition by a cloud speech-to-text API (see `cloud_asr.rs`).
+ */
+cloud_asr?: CloudAsrSettings; 
+/**
+ * Fork: API keys of the cloud speech services, by provider id.
+ */
+cloud_asr_api_keys?: SecretMap; 
+/**
+ * Fork: refine every dictation with the LLM, not only the post-processing shortcut
+ * (see `refine.rs`).
+ */
+post_process_always?: boolean; 
+/**
+ * Fork: the "Polish & structure" prompt was added once (a user may delete it).
+ */
+refine_prompt_seeded?: boolean; 
+/**
+ * Fork: the file with the user's own refine rules; empty = `refine-rules.txt` in the app
+ * data folder (see `refine::user_rules`).
+ */
+refine_rules_file?: string }
 export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
 export type AutoUnavailableReason = 
@@ -1221,6 +1390,65 @@ export type ChineseScript =
  */
 "traditional_hk"
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
+/**
+ * How a provider's API is called.
+ */
+export type CloudAsrApi = 
+/**
+ * `POST {base}/audio/transcriptions`, multipart (OpenAI and compatible services).
+ */
+"open_ai" | 
+/**
+ * The same with an `api-key` header and `api-version` query (Azure OpenAI deployments).
+ */
+"azure_open_ai" | 
+/**
+ * Azure AI Speech fast transcription (`/speechtotext/transcriptions:transcribe`).
+ */
+"azure_speech" | 
+/**
+ * Google Cloud Speech-to-Text v1 `speech:recognize` with an API key.
+ */
+"google" | 
+/**
+ * Deepgram pre-recorded audio (`/listen`).
+ */
+"deepgram" | 
+/**
+ * AssemblyAI upload, then transcript polling.
+ */
+"assembly_ai" | 
+/**
+ * ElevenLabs Scribe (`/speech-to-text`).
+ */
+"eleven_labs" | 
+/**
+ * Audio in an OpenAI-compatible chat completion (Alibaba Qwen3-ASR on DashScope).
+ */
+"chat_audio"
+export type CloudAsrProvider = { id: string; label: string; api: CloudAsrApi; base_url: string; 
+/**
+ * Shown as the placeholder when the endpoint is account specific.
+ */
+base_url_hint: string; model: string; models: string[]; key_url: string; key_optional: boolean; 
+/**
+ * Longest recording one request accepts; longer recordings are split by the app. 0 = no limit.
+ */
+max_audio_secs: number }
+export type CloudAsrSettings = { enabled: boolean; provider_id: string; 
+/**
+ * Endpoint per provider, when it differs from the provider's default.
+ */
+base_urls: Partial<{ [key in string]: string }>; 
+/**
+ * Model per provider, when it differs from the provider's default.
+ */
+models: Partial<{ [key in string]: string }>; 
+/**
+ * Seconds one recognition may take, upload included.
+ */
+timeout_secs: number }
+export type CloudAsrTestResult = { elapsed_ms: number; text: string }
 export type CustomSounds = { start: boolean; stop: boolean }
 export type GpuDeviceOption = { id: string; name: string; total_vram_mb: number }
 export type HistoryEntry = { id: number; file_name: string; timestamp: number; saved: boolean; title: string; transcription_text: string; post_processed_text: string | null; post_process_prompt: string | null; post_process_requested: boolean; 
@@ -1316,6 +1544,11 @@ export type LanguageStatus =
  * Auto can't work here; `language` is used instead.
  */
 { kind: "auto_unavailable"; language: string; reason: AutoUnavailableReason }
+export type LocalLlmEndpoint = { provider_id: string; label: string; base_url: string; models: string[]; 
+/**
+ * The model that suits dictation best (small, fast, instruction-tuned), if any.
+ */
+recommended: string | null }
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
 /**
  * A macOS privacy permission Handy asks for during onboarding.
@@ -1405,7 +1638,8 @@ export type PostProcessApiFormat =
  * Anthropic Messages (`/messages`)
  */
 "anthropic"
-export type PostProcessProvider = { id: string; label: string; base_url: string; allow_base_url_edit?: boolean; models_endpoint?: string | null; supports_structured_output?: boolean; api_format?: PostProcessApiFormat }
+export type PostProcessAuth = "auto" | "bearer" | "api_key" | "none"
+export type PostProcessProvider = { id: string; label: string; base_url: string; allow_base_url_edit?: boolean; models_endpoint?: string | null; supports_structured_output?: boolean; api_format?: PostProcessApiFormat; auth?: PostProcessAuth }
 /**
  * Recording phase events for windows that follow along (onboarding's Try it).
  */
@@ -1429,6 +1663,55 @@ export type RecordingPhase =
 "cancelled"
 export type RecordingRetentionPeriod = "never" | "preserve_limit" | "days_3" | "weeks_2" | "months_3"
 export type RecordingStateEvent = { phase: RecordingPhase }
+export type RefineBenchmark = { provider_id: string; model: string; 
+/**
+ * Median of the timed runs, after one warm-up run.
+ */
+median_ms: number; runs_ms: number[]; 
+/**
+ * What the selected prompt made of the sample dictation.
+ */
+output: string }
+export type RefineRules = { path: string; text: string; 
+/**
+ * How many rules the text holds.
+ */
+count: number }
+export type RemoteSettings = { enabled: boolean; 
+/**
+ * Server host name or address; empty, `localhost` or `127.0.0.1` means this machine (no SSH).
+ */
+host: string; user: string; ssh_port: number; 
+/**
+ * Private key for SSH; empty uses `<app data>/remote_ed25519` if it exists, else ssh's defaults.
+ */
+identity_file: string; 
+/**
+ * ssh executable; empty means auto-detect.
+ */
+ssh_path: string; server_port: number; 
+/**
+ * The server's SSH host key (`ssh-ed25519 AAAA…`) from the pairing code; pinned when set.
+ */
+host_key: string; label: string; 
+/**
+ * Paste each finished sentence while still recording.
+ */
+incremental_paste: boolean; 
+/**
+ * Follow the caret of the remote session inside a Remote Desktop window (Windows).
+ */
+rdp_caret: boolean; caret_port: number; 
+/**
+ * With a Remote Desktop window in front, hand the dictation toggle to Handy inside the remote
+ * session (which records the redirected microphone) through the caret helper (Windows).
+ */
+rdp_dictation: boolean }
+export type RemoteTestResult = { connect_ms: number; round_trip_ms: number | null; label: string | null; description: string | null; loaded: boolean | null; openvino: string | null; 
+/**
+ * The server answered but does not know the Status request (older server).
+ */
+old_server: boolean }
 /**
  * A retired ONNX model found on disk.
  */

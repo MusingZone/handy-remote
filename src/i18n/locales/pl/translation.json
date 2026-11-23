@@ -10,7 +10,13 @@
     "secureInputWarning": "⚠ Skróty zablokowane przez Secure Input",
     "language": "Język",
     "autoLanguage": "Automatycznie",
-    "otherLanguages": "Inne języki"
+    "otherLanguages": "Inne języki",
+    "voiceReview": "● Przejrzyj sugestie ({count} oczekuje)",
+    "voiceAnalyzing": "Analizowanie twojej opinii…",
+    "voiceNoPending": "Brak oczekujących sugestii",
+    "voiceTooltipPending": "Oczekujące sugestie dyktowania: {count} (kliknij ikonę)",
+    "voiceReport": "Zgłoś ostatnie dyktowanie…",
+    "voiceGuide": "Przewodnik po opiniach o dyktowaniu"
   },
   "sidebar": {
     "general": "Ogólne",
@@ -19,7 +25,9 @@
     "postProcessing": "Postproces",
     "history": "Historia",
     "debug": "Debugowanie",
-    "about": "O programie"
+    "about": "O programie",
+    "remote": "Zdalnie",
+    "cloud": "Cloud"
   },
   "onboarding": {
     "customModelDescription": "Nieoficjalnie wspierane",
@@ -144,6 +152,7 @@
       },
       "model": "Model",
       "showAll": "Pokaż wszystkie modele ({{count}})",
+      "useServer": "Mam serwer Handy Remote",
       "download": "Pobierz ({{size}})",
       "downloadInstead": "Pobierz zamiast tego ({{size}})",
       "pauses": "{{name}} zatrzymuje się na {{percent}}%",
@@ -666,6 +675,52 @@
           "placeholderWithOptions": "Wyszukaj lub wybierz model",
           "placeholderNoOptions": "Wpisz nazwę modelu",
           "refreshModels": "Odśwież modele"
+        },
+        "endpoint": {
+          "import": "Import endpoints",
+          "imported": "Imported {{count}} endpoints",
+          "importFailed": "Could not import endpoints",
+          "auth": "Authentication",
+          "authDescription": "Send only the selected authentication header. Automatic uses Bearer for OpenAI and x-api-key for Anthropic.",
+          "authFailed": "Could not save authentication",
+          "authOptions": {
+            "auto": "Automatic",
+            "bearer": "Bearer token",
+            "api_key": "api-key header",
+            "none": "None"
+          }
+        }
+      },
+      "refine": {
+        "title": "Refine with a language model",
+        "always": {
+          "label": "Refine every dictation",
+          "description": "Send every dictation through the model and prompt above before it is pasted, not only the post-processing shortcut. Live pasting while you speak is turned off, and pasting waits for the model."
+        },
+        "detect": {
+          "label": "Local models",
+          "description": "Find language model servers running on this computer (Ollama, LM Studio, llama.cpp, Foundry Local, OpenVINO Model Server, Lemonade) and the Copilot bridge. Text stays on this computer, except through the Copilot bridge, which passes it to GitHub Copilot.",
+          "button": "Find local models",
+          "running": "Searching…",
+          "none": "No local model server answered. Start one (for example Ollama with a small instruct model such as qwen2.5:3b) and search again.",
+          "recommended": "recommended",
+          "use": "Use"
+        },
+        "benchmark": {
+          "label": "Speed test",
+          "description": "Run the selected provider, model and prompt on a sample dictation (one warm-up, then three timed runs) and show the result.",
+          "button": "Run speed test",
+          "running": "Testing…",
+          "result": "{{model}}: median {{ms}} ms ({{runs}} ms)"
+        },
+        "rules": {
+          "label": "My rules",
+          "description": "Your own instructions for the model, one per line, such as how to write floors, numbers or product names. They are added to the selected prompt for every dictation and take priority over its rules. Lines starting with # are comments. The file is read on every dictation, so you can also edit it in any editor or keep it in a synced folder. Your custom words are always kept exactly as written.",
+          "placeholder": "# One rule per line, for example:\nWrite floors as digits: 三楼 → 3楼\nAlways write \"Copilot\" with a capital C",
+          "save": "Save rules",
+          "saved": "Saved, {{count}} rules in use.",
+          "file": "Rules file",
+          "useFile": "Use this file"
         }
       },
       "prompts": {
@@ -898,6 +953,139 @@
           "details": "Handy używa ggml do szybkiego, lokalnego przetwarzania mowy na tekst. Dzięki niesamowitej pracy Georgi Gerganova i współtwórców."
         }
       }
+    },
+    "remote": {
+      "intro": "Rozpoznawanie odbywa się na serwerze Handy Remote, np. na mocniejszym komputerze w sieci, łączonym przez SSH. Gdy ta opcja jest włączona, lokalne modele nie są używane.",
+      "guide": "Przewodnik konfiguracji",
+      "groups": {
+        "recognition": "Rozpoznawanie",
+        "connection": "Połączenie",
+        "key": "Klucz dostępu"
+      },
+      "enabled": {
+        "label": "Użyj zdalnego serwera",
+        "description": "Dyktowanie jest rozpoznawane na serwerze poniżej zamiast na tym komputerze."
+      },
+      "incremental_paste": {
+        "label": "Wklejaj podczas mówienia",
+        "description": "Wkleja każde ukończone zdanie jeszcze w trakcie nagrywania."
+      },
+      "rdp_caret": {
+        "label": "Śledź kursor w Pulpicie zdalnym",
+        "description": "Gdy okno Pulpitu zdalnego jest na pierwszym planie, nakładka pojawia się pod kursorem aplikacji w środku. Wymaga pomocnika kursora na serwerze."
+      },
+      "rdp_dictation": {
+        "label": "Dyktuj w Pulpicie zdalnym",
+        "description": "Gdy okno Pulpitu zdalnego jest na wierzchu, skrót dyktowania uruchamia Handy w sesji zdalnej, który nagrywa przekierowany mikrofon i wkleja tam tekst. Wymaga pomocnika kursora na serwerze; w przeciwnym razie dyktowanie odbywa się tutaj."
+      },
+      "pairing": {
+        "label": "Kod parowania",
+        "description": "Wklej kod wyświetlony przez \"doctor.py pair\" na serwerze, aby wypełnić pola poniżej.",
+        "apply": "Zastosuj",
+        "applied": "Wypełniono z kodu parowania. Przetestuj, a potem zapisz.",
+        "invalid": "Nieprawidłowy kod parowania: {{error}}"
+      },
+      "host": {
+        "label": "Serwer",
+        "description": "Nazwa hosta lub adres serwera. localhost, jeśli serwer działa na tym komputerze."
+      },
+      "user": {
+        "label": "Użytkownik SSH",
+        "description": "Konto do logowania na serwerze."
+      },
+      "ssh_port": {
+        "label": "Port SSH",
+        "description": "Port SSH serwera, zwykle 22."
+      },
+      "server_port": {
+        "label": "Port serwera",
+        "description": "Port, na którym nasłuchuje serwer rozpoznawania, na samym serwerze."
+      },
+      "caret_port": {
+        "label": "Port pomocnika kursora",
+        "description": "Port pomocnika kursora na serwerze."
+      },
+      "identity_file": {
+        "label": "Plik klucza SSH",
+        "description": "Klucz prywatny do logowania. Puste: własny klucz tej aplikacji, jeśli istnieje, w przeciwnym razie ustawienia domyślne SSH."
+      },
+      "ssh_path": {
+        "label": "Program ssh",
+        "description": "Ścieżka do ssh. Puste: wykrywanie automatyczne.",
+        "missing": "Nie znaleziono ssh"
+      },
+      "host_key": {
+        "label": "Klucz serwera",
+        "description": "Klucz hosta SSH serwera z kodu parowania. Gdy jest ustawiony, serwer z innym kluczem zostanie odrzucony.",
+        "none": "Nieprzypięty",
+        "clear": "Wyczyść"
+      },
+      "client_key": {
+        "label": "Klucz tego komputera",
+        "description": "Autoryzuj ten klucz raz: uruchom poniższe polecenie w folderze serwera.",
+        "none": "Brak klucza.",
+        "create": "Utwórz klucz",
+        "copy": "Kopiuj polecenie",
+        "copied": "Skopiowano"
+      },
+      "test": {
+        "button": "Testuj połączenie",
+        "running": "Testowanie…",
+        "connected": "Połączono w {{connect}} ms; serwer odpowiedział w {{roundTrip}} ms.",
+        "oldServer": "Serwer to starsza wersja i nie podaje szczegółów.",
+        "loaded": "Modele są załadowane.",
+        "sleeping": "Modele są zwolnione; załadują się przy pierwszym dyktowaniu (kilka sekund).",
+        "failed": "Połączenie nieudane: {{error}}"
+      },
+      "save": "Zapisz",
+      "revert": "Przywróć",
+      "saved": "Zapisano.",
+      "automatic": "Automatycznie"
+    },
+    "cloudAsr": {
+      "intro": "Recognize speech with a public cloud speech-to-text service of your choice (OpenAI, Azure, Google, Deepgram, AssemblyAI, ElevenLabs, Groq, Mistral, Alibaba Qwen3-ASR, SiliconFlow, or any OpenAI-compatible server). Each recording is uploaded once when it ends; there is no live preview.",
+      "privacy": "Your audio leaves this computer and is processed under the provider's terms. API keys are stored only in this computer's settings.",
+      "saved": "Saved.",
+      "save": "Save",
+      "revert": "Revert",
+      "groups": {
+        "recognition": "Recognition",
+        "service": "Service"
+      },
+      "enabled": {
+        "label": "Use cloud recognition",
+        "description": "Send dictation to the service below instead of recognizing on this computer or a remote server."
+      },
+      "provider": {
+        "label": "Provider",
+        "description": "Endpoint, model and key are remembered per provider."
+      },
+      "base_url": {
+        "label": "Endpoint",
+        "description": "Leave empty for the default. Change it for another region, a proxy, or a compatible server."
+      },
+      "model": {
+        "label": "Model",
+        "description": "Leave empty for the default model."
+      },
+      "api_key": {
+        "label": "API key",
+        "description": "Required by this provider.",
+        "optional": "Optional: only if your server asks for one.",
+        "placeholder": "Paste the key",
+        "saved": "Saved (type to replace)",
+        "get": "Get a key"
+      },
+      "timeout": {
+        "label": "Timeout (s)",
+        "description": "Longest wait for one recognition, upload included."
+      },
+      "test": {
+        "button": "Test",
+        "running": "Sending a one-second test sound…",
+        "failed": "Test failed: {{error}}",
+        "ok": "Works: answered in {{ms}} ms (recognized: {{text}})."
+      }
     }
   },
   "footer": {
@@ -982,7 +1170,11 @@
   "overlay": {
     "transcribing": "Transkrypcja...",
     "processing": "Przetwarzanie...",
-    "loadingModel": "Wczytywanie modelu..."
+    "loadingModel": "Wczytywanie modelu...",
+    "remoteWaking": "Wybudzanie modeli na serwerze…",
+    "speakNow": "Mów teraz",
+    "refineOn": "To dyktowanie zostanie dopracowane · kliknij, aby pominąć",
+    "refineOff": "To dyktowanie nie zostanie dopracowane · kliknij, aby dopracować"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} może blokować 1 skrót",

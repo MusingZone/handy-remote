@@ -10,7 +10,13 @@
     "secureInputWarning": "⚠ Secure Input으로 단축키가 차단됨",
     "language": "언어",
     "autoLanguage": "자동",
-    "otherLanguages": "기타 언어"
+    "otherLanguages": "기타 언어",
+    "voiceReview": "● 개선 제안 검토 ({count}개 대기)",
+    "voiceAnalyzing": "피드백 분석 중…",
+    "voiceNoPending": "대기 중인 제안 없음",
+    "voiceTooltipPending": "받아쓰기 개선 제안 {count}개 대기 중 (아이콘 클릭)",
+    "voiceReport": "마지막 받아쓰기 신고…",
+    "voiceGuide": "받아쓰기 피드백 안내"
   },
   "sidebar": {
     "general": "일반",
@@ -19,7 +25,9 @@
     "postProcessing": "후처리",
     "history": "히스토리",
     "debug": "디버그",
-    "about": "정보"
+    "about": "정보",
+    "remote": "원격",
+    "cloud": "Cloud"
   },
   "onboarding": {
     "customModelDescription": "공식 지원되지 않음",
@@ -144,6 +152,7 @@
       },
       "model": "모델",
       "showAll": "모델 {{count}}개 모두 보기",
+      "useServer": "Handy Remote 서버가 있습니다",
       "download": "{{size}} 다운로드",
       "downloadInstead": "대신 {{size}} 다운로드",
       "pauses": "{{name}}은(는) {{percent}}%에서 일시 중지됩니다",
@@ -666,6 +675,52 @@
           "placeholderWithOptions": "모델 검색 또는 선택",
           "placeholderNoOptions": "모델 이름 입력",
           "refreshModels": "모델 새로고침"
+        },
+        "endpoint": {
+          "import": "Import endpoints",
+          "imported": "Imported {{count}} endpoints",
+          "importFailed": "Could not import endpoints",
+          "auth": "Authentication",
+          "authDescription": "Send only the selected authentication header. Automatic uses Bearer for OpenAI and x-api-key for Anthropic.",
+          "authFailed": "Could not save authentication",
+          "authOptions": {
+            "auto": "Automatic",
+            "bearer": "Bearer token",
+            "api_key": "api-key header",
+            "none": "None"
+          }
+        }
+      },
+      "refine": {
+        "title": "Refine with a language model",
+        "always": {
+          "label": "Refine every dictation",
+          "description": "Send every dictation through the model and prompt above before it is pasted, not only the post-processing shortcut. Live pasting while you speak is turned off, and pasting waits for the model."
+        },
+        "detect": {
+          "label": "Local models",
+          "description": "Find language model servers running on this computer (Ollama, LM Studio, llama.cpp, Foundry Local, OpenVINO Model Server, Lemonade) and the Copilot bridge. Text stays on this computer, except through the Copilot bridge, which passes it to GitHub Copilot.",
+          "button": "Find local models",
+          "running": "Searching…",
+          "none": "No local model server answered. Start one (for example Ollama with a small instruct model such as qwen2.5:3b) and search again.",
+          "recommended": "recommended",
+          "use": "Use"
+        },
+        "benchmark": {
+          "label": "Speed test",
+          "description": "Run the selected provider, model and prompt on a sample dictation (one warm-up, then three timed runs) and show the result.",
+          "button": "Run speed test",
+          "running": "Testing…",
+          "result": "{{model}}: median {{ms}} ms ({{runs}} ms)"
+        },
+        "rules": {
+          "label": "My rules",
+          "description": "Your own instructions for the model, one per line, such as how to write floors, numbers or product names. They are added to the selected prompt for every dictation and take priority over its rules. Lines starting with # are comments. The file is read on every dictation, so you can also edit it in any editor or keep it in a synced folder. Your custom words are always kept exactly as written.",
+          "placeholder": "# One rule per line, for example:\nWrite floors as digits: 三楼 → 3楼\nAlways write \"Copilot\" with a capital C",
+          "save": "Save rules",
+          "saved": "Saved, {{count}} rules in use.",
+          "file": "Rules file",
+          "useFile": "Use this file"
         }
       },
       "prompts": {
@@ -898,6 +953,139 @@
           "details": "Handy는 빠르고 로컬 음성-텍스트 처리를 위해 ggml를 사용합니다. Georgi Gerganov와 기여자들의 놀라운 작업에 감사드립니다."
         }
       }
+    },
+    "remote": {
+      "intro": "SSH로 연결한 Handy Remote 서버(예: 네트워크의 더 강력한 컴퓨터)에서 인식합니다. 켜져 있는 동안 로컬 모델은 사용하지 않습니다.",
+      "guide": "설정 가이드",
+      "groups": {
+        "recognition": "인식",
+        "connection": "연결",
+        "key": "액세스 키"
+      },
+      "enabled": {
+        "label": "원격 서버 사용",
+        "description": "이 컴퓨터 대신 아래 서버에서 음성을 인식합니다."
+      },
+      "incremental_paste": {
+        "label": "말하는 동안 붙여넣기",
+        "description": "녹음 중에도 문장이 끝날 때마다 붙여넣습니다."
+      },
+      "rdp_caret": {
+        "label": "원격 데스크톱에서 커서 따라가기",
+        "description": "원격 데스크톱 창이 앞에 있으면 그 안의 앱 커서 아래에 오버레이를 표시합니다. 서버에 커서 도우미가 필요합니다."
+      },
+      "rdp_dictation": {
+        "label": "원격 데스크톱 안에서 받아쓰기",
+        "description": "원격 데스크톱 창이 앞에 있으면 받아쓰기 단축키가 원격 세션의 Handy를 시작하여 리디렉션된 마이크를 녹음하고 그곳에 붙여넣습니다. 서버에 커서 도우미가 필요하며, 없으면 여기에서 받아씁니다."
+      },
+      "pairing": {
+        "label": "페어링 코드",
+        "description": "서버에서 \"doctor.py pair\"가 출력한 코드를 붙여넣으면 아래 항목이 채워집니다.",
+        "apply": "적용",
+        "applied": "페어링 코드로 채웠습니다. 테스트한 뒤 저장하세요.",
+        "invalid": "잘못된 페어링 코드: {{error}}"
+      },
+      "host": {
+        "label": "서버",
+        "description": "서버의 호스트 이름 또는 주소. 이 컴퓨터에서 실행하면 localhost."
+      },
+      "user": {
+        "label": "SSH 사용자",
+        "description": "서버에 로그인할 계정."
+      },
+      "ssh_port": {
+        "label": "SSH 포트",
+        "description": "서버의 SSH 포트(보통 22)."
+      },
+      "server_port": {
+        "label": "서버 포트",
+        "description": "인식 서버가 서버에서 수신하는 포트."
+      },
+      "caret_port": {
+        "label": "커서 도우미 포트",
+        "description": "서버의 커서 도우미 포트."
+      },
+      "identity_file": {
+        "label": "SSH 키 파일",
+        "description": "로그인에 쓸 개인 키. 비워 두면 이 앱의 키가 있으면 그것을, 없으면 SSH 기본값을 씁니다."
+      },
+      "ssh_path": {
+        "label": "ssh 프로그램",
+        "description": "ssh 경로. 비워 두면 자동으로 찾습니다.",
+        "missing": "ssh를 찾을 수 없음"
+      },
+      "host_key": {
+        "label": "서버 키",
+        "description": "페어링 코드에 담긴 서버의 SSH 호스트 키. 설정하면 키가 다른 서버는 거부됩니다.",
+        "none": "고정 안 됨",
+        "clear": "지우기"
+      },
+      "client_key": {
+        "label": "이 컴퓨터의 키",
+        "description": "한 번만 승인하세요: 서버 폴더에서 아래 명령을 실행합니다.",
+        "none": "아직 키가 없습니다.",
+        "create": "키 만들기",
+        "copy": "명령 복사",
+        "copied": "복사됨"
+      },
+      "test": {
+        "button": "연결 테스트",
+        "running": "테스트 중…",
+        "connected": "{{connect}}ms 만에 연결, 서버가 {{roundTrip}}ms 만에 응답했습니다.",
+        "oldServer": "서버가 이전 버전이라 세부 정보를 제공하지 않습니다.",
+        "loaded": "모델이 로드되어 있습니다.",
+        "sleeping": "모델이 언로드되었습니다. 첫 받아쓰기 때 로드됩니다(몇 초).",
+        "failed": "연결 실패: {{error}}"
+      },
+      "save": "저장",
+      "revert": "되돌리기",
+      "saved": "저장했습니다.",
+      "automatic": "자동"
+    },
+    "cloudAsr": {
+      "intro": "Recognize speech with a public cloud speech-to-text service of your choice (OpenAI, Azure, Google, Deepgram, AssemblyAI, ElevenLabs, Groq, Mistral, Alibaba Qwen3-ASR, SiliconFlow, or any OpenAI-compatible server). Each recording is uploaded once when it ends; there is no live preview.",
+      "privacy": "Your audio leaves this computer and is processed under the provider's terms. API keys are stored only in this computer's settings.",
+      "saved": "Saved.",
+      "save": "Save",
+      "revert": "Revert",
+      "groups": {
+        "recognition": "Recognition",
+        "service": "Service"
+      },
+      "enabled": {
+        "label": "Use cloud recognition",
+        "description": "Send dictation to the service below instead of recognizing on this computer or a remote server."
+      },
+      "provider": {
+        "label": "Provider",
+        "description": "Endpoint, model and key are remembered per provider."
+      },
+      "base_url": {
+        "label": "Endpoint",
+        "description": "Leave empty for the default. Change it for another region, a proxy, or a compatible server."
+      },
+      "model": {
+        "label": "Model",
+        "description": "Leave empty for the default model."
+      },
+      "api_key": {
+        "label": "API key",
+        "description": "Required by this provider.",
+        "optional": "Optional: only if your server asks for one.",
+        "placeholder": "Paste the key",
+        "saved": "Saved (type to replace)",
+        "get": "Get a key"
+      },
+      "timeout": {
+        "label": "Timeout (s)",
+        "description": "Longest wait for one recognition, upload included."
+      },
+      "test": {
+        "button": "Test",
+        "running": "Sending a one-second test sound…",
+        "failed": "Test failed: {{error}}",
+        "ok": "Works: answered in {{ms}} ms (recognized: {{text}})."
+      }
     }
   },
   "footer": {
@@ -982,7 +1170,11 @@
   "overlay": {
     "transcribing": "텍스트로 변환 중...",
     "processing": "처리 중...",
-    "loadingModel": "모델 로딩 중..."
+    "loadingModel": "모델 로딩 중...",
+    "remoteWaking": "서버 모델을 깨우는 중…",
+    "speakNow": "말씀하세요",
+    "refineOn": "이번 받아쓰기를 다듬습니다 · 클릭하여 건너뛰기",
+    "refineOff": "이번 받아쓰기는 다듬지 않습니다 · 클릭하여 다듬기"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}}이(가) 단축키 1개를 차단하고 있을 수 있습니다",

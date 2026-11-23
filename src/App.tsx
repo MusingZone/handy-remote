@@ -293,7 +293,15 @@ function App() {
       </>
     );
   } else if (onboardingStep === "flow") {
-    content = <OnboardingFlow onComplete={() => setOnboardingStep("done")} />;
+    content = (
+      <OnboardingFlow
+        onComplete={() => setOnboardingStep("done")}
+        onUseServer={() => {
+          setCurrentSection("remote");
+          setOnboardingStep("done");
+        }}
+      />
+    );
   } else if (onboardingStep === "permissions") {
     content = (
       <ReturningPermissions

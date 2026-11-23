@@ -9,7 +9,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::actions::ACTION_MAP;
 use crate::managers::audio::AudioRecordingManager;
-use crate::settings::get_settings;
+use crate::settings::{get_settings, ShortcutActivation};
 use crate::transcription_coordinator::is_transcribe_binding;
 use crate::TranscriptionCoordinator;
 
@@ -36,6 +36,12 @@ pub fn handle_shortcut_event(
 
     // Transcribe bindings are handled by the coordinator.
     if is_transcribe_binding(binding_id) {
+        if is_pressed
+            && settings.shortcut_activation == ShortcutActivation::Toggle
+            && crate::signal_handle::forwarded_to_remote_desktop(app)
+        {
+            return;
+        }
         if let Some(coordinator) = app.try_state::<TranscriptionCoordinator>() {
             coordinator.send_input(
                 binding_id,

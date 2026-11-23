@@ -10,7 +10,13 @@
     "secureInputWarning": "⚠ Dreceres blocades per l'entrada segura",
     "language": "Llengua",
     "autoLanguage": "Automàtica",
-    "otherLanguages": "Altres llengües"
+    "otherLanguages": "Altres llengües",
+    "voiceReview": "● Revisa els suggeriments ({count} pendents)",
+    "voiceAnalyzing": "S'està analitzant el teu comentari…",
+    "voiceNoPending": "No hi ha suggeriments pendents",
+    "voiceTooltipPending": "{count} suggeriments de dictat pendents (fes clic a la icona)",
+    "voiceReport": "Informa de l'últim dictat…",
+    "voiceGuide": "Guia de comentaris de dictat"
   },
   "sidebar": {
     "general": "General",
@@ -19,7 +25,9 @@
     "postProcessing": "Postprocessament",
     "history": "Historial",
     "debug": "Depuració",
-    "about": "Quant a"
+    "about": "Quant a",
+    "remote": "Remot",
+    "cloud": "Cloud"
   },
   "onboarding": {
     "customModelDescription": "Sense suport oficial",
@@ -144,6 +152,7 @@
       },
       "model": "Model",
       "showAll": "Mostra els {{count}} models",
+      "useServer": "Tinc un servidor Handy Remote",
       "download": "Baixa {{size}}",
       "downloadInstead": "Baixa {{size}} en lloc seu",
       "pauses": "{{name}} es posa en pausa al {{percent}} %",
@@ -666,6 +675,52 @@
           "placeholderWithOptions": "Cerqueu o seleccioneu un model",
           "placeholderNoOptions": "Escriviu el nom d'un model",
           "refreshModels": "Actualitzeu els models"
+        },
+        "endpoint": {
+          "import": "Import endpoints",
+          "imported": "Imported {{count}} endpoints",
+          "importFailed": "Could not import endpoints",
+          "auth": "Authentication",
+          "authDescription": "Send only the selected authentication header. Automatic uses Bearer for OpenAI and x-api-key for Anthropic.",
+          "authFailed": "Could not save authentication",
+          "authOptions": {
+            "auto": "Automatic",
+            "bearer": "Bearer token",
+            "api_key": "api-key header",
+            "none": "None"
+          }
+        }
+      },
+      "refine": {
+        "title": "Refine with a language model",
+        "always": {
+          "label": "Refine every dictation",
+          "description": "Send every dictation through the model and prompt above before it is pasted, not only the post-processing shortcut. Live pasting while you speak is turned off, and pasting waits for the model."
+        },
+        "detect": {
+          "label": "Local models",
+          "description": "Find language model servers running on this computer (Ollama, LM Studio, llama.cpp, Foundry Local, OpenVINO Model Server, Lemonade) and the Copilot bridge. Text stays on this computer, except through the Copilot bridge, which passes it to GitHub Copilot.",
+          "button": "Find local models",
+          "running": "Searching…",
+          "none": "No local model server answered. Start one (for example Ollama with a small instruct model such as qwen2.5:3b) and search again.",
+          "recommended": "recommended",
+          "use": "Use"
+        },
+        "benchmark": {
+          "label": "Speed test",
+          "description": "Run the selected provider, model and prompt on a sample dictation (one warm-up, then three timed runs) and show the result.",
+          "button": "Run speed test",
+          "running": "Testing…",
+          "result": "{{model}}: median {{ms}} ms ({{runs}} ms)"
+        },
+        "rules": {
+          "label": "My rules",
+          "description": "Your own instructions for the model, one per line, such as how to write floors, numbers or product names. They are added to the selected prompt for every dictation and take priority over its rules. Lines starting with # are comments. The file is read on every dictation, so you can also edit it in any editor or keep it in a synced folder. Your custom words are always kept exactly as written.",
+          "placeholder": "# One rule per line, for example:\nWrite floors as digits: 三楼 → 3楼\nAlways write \"Copilot\" with a capital C",
+          "save": "Save rules",
+          "saved": "Saved, {{count}} rules in use.",
+          "file": "Rules file",
+          "useFile": "Use this file"
         }
       },
       "prompts": {
@@ -898,6 +953,139 @@
           "details": "La transcripció local de veu a text del Handy es basa en el transcribe.cpp i el ggml. Gràcies a la gran feina de Georgi Gerganov i dels col·laboradors."
         }
       }
+    },
+    "remote": {
+      "intro": "Fa el reconeixement en un servidor Handy Remote, per exemple un ordinador més potent de la teva xarxa, accessible per SSH. Mentre estigui activat, no s'utilitzen els models locals.",
+      "guide": "Guia d'instal·lació",
+      "groups": {
+        "recognition": "Reconeixement",
+        "connection": "Connexió",
+        "key": "Clau d'accés"
+      },
+      "enabled": {
+        "label": "Utilitza un servidor remot",
+        "description": "El dictat es reconeix al servidor de sota en lloc d'aquest ordinador."
+      },
+      "incremental_paste": {
+        "label": "Enganxa mentre parles",
+        "description": "Enganxa cada frase acabada mentre encara enregistres."
+      },
+      "rdp_caret": {
+        "label": "Segueix el cursor a l'Escriptori remot",
+        "description": "Quan una finestra d'Escriptori remot és al davant, la superposició apareix sota el cursor de l'aplicació que conté. Cal l'assistent de cursor al servidor."
+      },
+      "rdp_dictation": {
+        "label": "Dictar dins de l'Escriptori remot",
+        "description": "Quan una finestra d'Escriptori remot és al davant, la drecera de dictat inicia el Handy de la sessió remota, que enregistra el micròfon redirigit i hi enganxa el text. Cal l'ajudant del cursor al servidor; si no, es dicta aquí."
+      },
+      "pairing": {
+        "label": "Codi d'aparellament",
+        "description": "Enganxa el codi que mostra \"doctor.py pair\" al servidor per omplir els camps de sota.",
+        "apply": "Aplica",
+        "applied": "Omplert a partir del codi d'aparellament. Prova-ho i després desa.",
+        "invalid": "Codi d'aparellament no vàlid: {{error}}"
+      },
+      "host": {
+        "label": "Servidor",
+        "description": "Nom d'amfitrió o adreça del servidor. localhost si el servidor s'executa en aquest ordinador."
+      },
+      "user": {
+        "label": "Usuari SSH",
+        "description": "Compte per iniciar la sessió al servidor."
+      },
+      "ssh_port": {
+        "label": "Port SSH",
+        "description": "Port SSH del servidor, normalment 22."
+      },
+      "server_port": {
+        "label": "Port del servidor",
+        "description": "Port on escolta el servidor de reconeixement, al mateix servidor."
+      },
+      "caret_port": {
+        "label": "Port de l'assistent de cursor",
+        "description": "Port de l'assistent de cursor al servidor."
+      },
+      "identity_file": {
+        "label": "Fitxer de clau SSH",
+        "description": "Clau privada per iniciar la sessió. Buit: la clau pròpia d'aquesta aplicació si existeix; si no, els valors per defecte d'SSH."
+      },
+      "ssh_path": {
+        "label": "Programa ssh",
+        "description": "Camí de ssh. Buit: detecció automàtica.",
+        "missing": "No s'ha trobat ssh"
+      },
+      "host_key": {
+        "label": "Clau del servidor",
+        "description": "Clau d'amfitrió SSH del servidor del codi d'aparellament. Si està definida, es rebutja un servidor amb una altra clau.",
+        "none": "No fixada",
+        "clear": "Esborra"
+      },
+      "client_key": {
+        "label": "Clau d'aquest ordinador",
+        "description": "Autoritza aquesta clau una vegada: executa l'ordre de sota a la carpeta del servidor.",
+        "none": "Encara no hi ha clau.",
+        "create": "Crea una clau",
+        "copy": "Copia l'ordre",
+        "copied": "Copiat"
+      },
+      "test": {
+        "button": "Prova la connexió",
+        "running": "S'està provant…",
+        "connected": "Connectat en {{connect}} ms; el servidor ha respost en {{roundTrip}} ms.",
+        "oldServer": "El servidor és una versió antiga i no dona detalls.",
+        "loaded": "Els models estan carregats.",
+        "sleeping": "Els models estan descarregats; es carreguen amb el primer dictat (uns segons).",
+        "failed": "Ha fallat la connexió: {{error}}"
+      },
+      "save": "Desa",
+      "revert": "Reverteix",
+      "saved": "Desat.",
+      "automatic": "Automàtic"
+    },
+    "cloudAsr": {
+      "intro": "Recognize speech with a public cloud speech-to-text service of your choice (OpenAI, Azure, Google, Deepgram, AssemblyAI, ElevenLabs, Groq, Mistral, Alibaba Qwen3-ASR, SiliconFlow, or any OpenAI-compatible server). Each recording is uploaded once when it ends; there is no live preview.",
+      "privacy": "Your audio leaves this computer and is processed under the provider's terms. API keys are stored only in this computer's settings.",
+      "saved": "Saved.",
+      "save": "Save",
+      "revert": "Revert",
+      "groups": {
+        "recognition": "Recognition",
+        "service": "Service"
+      },
+      "enabled": {
+        "label": "Use cloud recognition",
+        "description": "Send dictation to the service below instead of recognizing on this computer or a remote server."
+      },
+      "provider": {
+        "label": "Provider",
+        "description": "Endpoint, model and key are remembered per provider."
+      },
+      "base_url": {
+        "label": "Endpoint",
+        "description": "Leave empty for the default. Change it for another region, a proxy, or a compatible server."
+      },
+      "model": {
+        "label": "Model",
+        "description": "Leave empty for the default model."
+      },
+      "api_key": {
+        "label": "API key",
+        "description": "Required by this provider.",
+        "optional": "Optional: only if your server asks for one.",
+        "placeholder": "Paste the key",
+        "saved": "Saved (type to replace)",
+        "get": "Get a key"
+      },
+      "timeout": {
+        "label": "Timeout (s)",
+        "description": "Longest wait for one recognition, upload included."
+      },
+      "test": {
+        "button": "Test",
+        "running": "Sending a one-second test sound…",
+        "failed": "Test failed: {{error}}",
+        "ok": "Works: answered in {{ms}} ms (recognized: {{text}})."
+      }
     }
   },
   "footer": {
@@ -982,7 +1170,11 @@
   "overlay": {
     "transcribing": "S'està transcrivint...",
     "processing": "S'està processant...",
-    "loadingModel": "S'està carregant el model..."
+    "loadingModel": "S'està carregant el model...",
+    "remoteWaking": "S'estan despertant els models del servidor…",
+    "speakNow": "Parla ara",
+    "refineOn": "Aquest dictat es polirà · feu clic per ometre'l",
+    "refineOff": "Aquest dictat no es polirà · feu clic per polir-lo"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} pot estar blocant 1 drecera",

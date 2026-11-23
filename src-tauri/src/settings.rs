@@ -106,6 +106,16 @@ pub enum PostProcessApiFormat {
     Anthropic,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum PostProcessAuth {
+    #[default]
+    Auto,
+    Bearer,
+    ApiKey,
+    None,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Type)]
 pub struct PostProcessProvider {
     pub id: String,
@@ -119,6 +129,8 @@ pub struct PostProcessProvider {
     pub supports_structured_output: bool,
     #[serde(default)]
     pub api_format: PostProcessApiFormat,
+    #[serde(default)]
+    pub auth: PostProcessAuth,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type)]
@@ -572,6 +584,30 @@ pub struct AppSettings {
     /// `overlay_position` (position `none` → style `None`).
     #[serde(default = "default_overlay_style")]
     pub overlay_style: OverlayStyle,
+    /// Fork: recognition on a Handy Remote server (see `remote.rs`).
+    #[serde(default)]
+    pub remote: crate::remote::RemoteSettings,
+    /// Fork: recognition by a cloud speech-to-text API (see `cloud_asr.rs`).
+    #[serde(default)]
+    pub cloud_asr: crate::cloud_asr::CloudAsrSettings,
+    /// Fork: API keys of the cloud speech services, by provider id.
+    #[serde(default = "empty_secret_map")]
+    pub cloud_asr_api_keys: SecretMap,
+    /// Fork: refine every dictation with the LLM, not only the post-processing shortcut
+    /// (see `refine.rs`).
+    #[serde(default)]
+    pub post_process_always: bool,
+    /// Fork: the "Polish & structure" prompt was added once (a user may delete it).
+    #[serde(default)]
+    pub refine_prompt_seeded: bool,
+    /// Fork: the file with the user's own refine rules; empty = `refine-rules.txt` in the app
+    /// data folder (see `refine::user_rules`).
+    #[serde(default)]
+    pub refine_rules_file: String,
+}
+
+fn empty_secret_map() -> SecretMap {
+    SecretMap(HashMap::new())
 }
 
 fn default_model() -> String {
@@ -738,6 +774,7 @@ fn default_post_process_providers() -> Vec<PostProcessProvider> {
             models_endpoint: Some("/models".to_string()),
             supports_structured_output: true,
             api_format: PostProcessApiFormat::OpenAi,
+            auth: PostProcessAuth::Auto,
         },
         PostProcessProvider {
             id: "zai".to_string(),
@@ -747,6 +784,7 @@ fn default_post_process_providers() -> Vec<PostProcessProvider> {
             models_endpoint: Some("/models".to_string()),
             supports_structured_output: true,
             api_format: PostProcessApiFormat::OpenAi,
+            auth: PostProcessAuth::Auto,
         },
         PostProcessProvider {
             id: "openrouter".to_string(),
@@ -756,6 +794,7 @@ fn default_post_process_providers() -> Vec<PostProcessProvider> {
             models_endpoint: Some("/models".to_string()),
             supports_structured_output: true,
             api_format: PostProcessApiFormat::OpenAi,
+            auth: PostProcessAuth::Auto,
         },
         PostProcessProvider {
             id: "anthropic".to_string(),
@@ -765,6 +804,7 @@ fn default_post_process_providers() -> Vec<PostProcessProvider> {
             models_endpoint: Some("/models".to_string()),
             supports_structured_output: false,
             api_format: PostProcessApiFormat::Anthropic,
+            auth: PostProcessAuth::Auto,
         },
         PostProcessProvider {
             id: "groq".to_string(),
@@ -774,6 +814,7 @@ fn default_post_process_providers() -> Vec<PostProcessProvider> {
             models_endpoint: Some("/models".to_string()),
             supports_structured_output: false,
             api_format: PostProcessApiFormat::OpenAi,
+            auth: PostProcessAuth::Auto,
         },
         PostProcessProvider {
             id: "cerebras".to_string(),
@@ -783,6 +824,7 @@ fn default_post_process_providers() -> Vec<PostProcessProvider> {
             models_endpoint: Some("/models".to_string()),
             supports_structured_output: true,
             api_format: PostProcessApiFormat::OpenAi,
+            auth: PostProcessAuth::Auto,
         },
     ];
 
@@ -800,6 +842,7 @@ fn default_post_process_providers() -> Vec<PostProcessProvider> {
             models_endpoint: None,
             supports_structured_output: true,
             api_format: PostProcessApiFormat::OpenAi,
+            auth: PostProcessAuth::Auto,
         });
     }
 
@@ -812,7 +855,11 @@ fn default_post_process_providers() -> Vec<PostProcessProvider> {
         models_endpoint: Some("/models".to_string()),
         supports_structured_output: true,
         api_format: PostProcessApiFormat::OpenAi,
+        auth: PostProcessAuth::Auto,
     });
+
+    // Fork: local OpenAI-compatible servers and more cloud services.
+    providers.extend(crate::refine::extra_providers());
 
     // Custom provider always comes last
     providers.push(PostProcessProvider {
@@ -823,6 +870,7 @@ fn default_post_process_providers() -> Vec<PostProcessProvider> {
         models_endpoint: Some("/models".to_string()),
         supports_structured_output: false,
         api_format: PostProcessApiFormat::OpenAi,
+        auth: PostProcessAuth::Auto,
     });
 
     providers
@@ -921,8 +969,15 @@ fn ensure_post_process_defaults(settings: &mut AppSettings) -> bool {
                 }
             }
             None => {
-                // Provider doesn't exist, add it
-                settings.post_process_providers.push(provider.clone());
+                // Provider doesn't exist, add it (fork: before "Custom", which stays last)
+                match settings
+                    .post_process_providers
+                    .iter()
+                    .position(|p| p.id == "custom")
+                {
+                    Some(i) => settings.post_process_providers.insert(i, provider.clone()),
+                    None => settings.post_process_providers.push(provider.clone()),
+                }
                 changed = true;
             }
         }
@@ -949,6 +1004,10 @@ fn ensure_post_process_defaults(settings: &mut AppSettings) -> bool {
                 changed = true;
             }
         }
+    }
+
+    if crate::refine::seed_defaults(settings) {
+        changed = true;
     }
 
     changed
@@ -1076,6 +1135,12 @@ pub fn get_default_settings() -> AppSettings {
         language_detection: LanguageDetectionMode::default(),
         language_detection_window_secs: default_language_detection_window_secs(),
         overlay_style: default_overlay_style(),
+        remote: crate::remote::RemoteSettings::default(),
+        cloud_asr: crate::cloud_asr::CloudAsrSettings::default(),
+        cloud_asr_api_keys: empty_secret_map(),
+        post_process_always: false,
+        refine_prompt_seeded: false,
+        refine_rules_file: String::new(),
     }
 }
 

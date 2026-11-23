@@ -10,7 +10,13 @@
     "secureInputWarning": "⚠ Secure Input でショートカットがブロック中",
     "language": "言語",
     "autoLanguage": "自動",
-    "otherLanguages": "その他の言語"
+    "otherLanguages": "その他の言語",
+    "voiceReview": "● 改善案を確認（{count} 件）",
+    "voiceAnalyzing": "フィードバックを分析中…",
+    "voiceNoPending": "確認待ちの改善案はありません",
+    "voiceTooltipPending": "音声入力の改善案が {count} 件あります（アイコンをクリック）",
+    "voiceReport": "直前の認識結果を報告…",
+    "voiceGuide": "フィードバックの使い方"
   },
   "sidebar": {
     "general": "一般",
@@ -19,7 +25,9 @@
     "postProcessing": "後処理",
     "history": "履歴",
     "debug": "デバッグ",
-    "about": "概要"
+    "about": "概要",
+    "remote": "リモート",
+    "cloud": "Cloud"
   },
   "onboarding": {
     "customModelDescription": "公式サポート対象外",
@@ -144,6 +152,7 @@
       },
       "model": "モデル",
       "showAll": "全 {{count}} 個のモデルを表示",
+      "useServer": "Handy Remote サーバーを使う",
       "download": "{{size}} をダウンロード",
       "downloadInstead": "代わりに {{size}} をダウンロード",
       "pauses": "{{name}} は {{percent}}% で一時停止中",
@@ -666,6 +675,52 @@
           "placeholderWithOptions": "モデルを検索または選択",
           "placeholderNoOptions": "モデル名を入力",
           "refreshModels": "モデルを更新"
+        },
+        "endpoint": {
+          "import": "Import endpoints",
+          "imported": "Imported {{count}} endpoints",
+          "importFailed": "Could not import endpoints",
+          "auth": "Authentication",
+          "authDescription": "Send only the selected authentication header. Automatic uses Bearer for OpenAI and x-api-key for Anthropic.",
+          "authFailed": "Could not save authentication",
+          "authOptions": {
+            "auto": "Automatic",
+            "bearer": "Bearer token",
+            "api_key": "api-key header",
+            "none": "None"
+          }
+        }
+      },
+      "refine": {
+        "title": "Refine with a language model",
+        "always": {
+          "label": "Refine every dictation",
+          "description": "Send every dictation through the model and prompt above before it is pasted, not only the post-processing shortcut. Live pasting while you speak is turned off, and pasting waits for the model."
+        },
+        "detect": {
+          "label": "Local models",
+          "description": "Find language model servers running on this computer (Ollama, LM Studio, llama.cpp, Foundry Local, OpenVINO Model Server, Lemonade) and the Copilot bridge. Text stays on this computer, except through the Copilot bridge, which passes it to GitHub Copilot.",
+          "button": "Find local models",
+          "running": "Searching…",
+          "none": "No local model server answered. Start one (for example Ollama with a small instruct model such as qwen2.5:3b) and search again.",
+          "recommended": "recommended",
+          "use": "Use"
+        },
+        "benchmark": {
+          "label": "Speed test",
+          "description": "Run the selected provider, model and prompt on a sample dictation (one warm-up, then three timed runs) and show the result.",
+          "button": "Run speed test",
+          "running": "Testing…",
+          "result": "{{model}}: median {{ms}} ms ({{runs}} ms)"
+        },
+        "rules": {
+          "label": "My rules",
+          "description": "Your own instructions for the model, one per line, such as how to write floors, numbers or product names. They are added to the selected prompt for every dictation and take priority over its rules. Lines starting with # are comments. The file is read on every dictation, so you can also edit it in any editor or keep it in a synced folder. Your custom words are always kept exactly as written.",
+          "placeholder": "# One rule per line, for example:\nWrite floors as digits: 三楼 → 3楼\nAlways write \"Copilot\" with a capital C",
+          "save": "Save rules",
+          "saved": "Saved, {{count}} rules in use.",
+          "file": "Rules file",
+          "useFile": "Use this file"
         }
       },
       "prompts": {
@@ -898,6 +953,139 @@
           "details": "Handy のローカルの音声からテキストへの文字起こしは transcribe.cpp と ggml を基盤としています。Georgi Gerganov 氏と貢献者の皆様の素晴らしい仕事に感謝します。"
         }
       }
+    },
+    "remote": {
+      "intro": "認識を Handy Remote サーバー（ネットワーク上の高性能なコンピューターなど）で SSH 経由で行います。オンの間はローカルのモデルを使いません。",
+      "guide": "セットアップガイド",
+      "groups": {
+        "recognition": "認識",
+        "connection": "接続",
+        "key": "アクセスキー"
+      },
+      "enabled": {
+        "label": "リモートサーバーを使う",
+        "description": "このコンピューターではなく、下のサーバーで音声を認識します。"
+      },
+      "incremental_paste": {
+        "label": "話しながら貼り付け",
+        "description": "録音中でも、文が終わるたびに貼り付けます。"
+      },
+      "rdp_caret": {
+        "label": "リモートデスクトップでカーソルに追従",
+        "description": "リモートデスクトップのウィンドウが前面にあるとき、その中のアプリのカーソルの下にオーバーレイを表示します。サーバーでカーソルヘルパーが必要です。"
+      },
+      "rdp_dictation": {
+        "label": "リモートデスクトップ内で音声入力",
+        "description": "リモートデスクトップのウィンドウが前面にあるとき、音声入力ショートカットはリモートセッション内の Handy を起動し、リダイレクトされたマイクで録音してそこに貼り付けます。サーバーにカーソルヘルパーが必要です。使えない場合はこの PC で入力します。"
+      },
+      "pairing": {
+        "label": "ペアリングコード",
+        "description": "サーバーで \"doctor.py pair\" が表示したコードを貼り付けると、下の項目が入力されます。",
+        "apply": "適用",
+        "applied": "ペアリングコードから入力しました。テストしてから保存してください。",
+        "invalid": "無効なペアリングコード: {{error}}"
+      },
+      "host": {
+        "label": "サーバー",
+        "description": "サーバーのホスト名またはアドレス。このコンピューターで動かす場合は localhost。"
+      },
+      "user": {
+        "label": "SSH ユーザー",
+        "description": "サーバーにサインインするアカウント。"
+      },
+      "ssh_port": {
+        "label": "SSH ポート",
+        "description": "サーバーの SSH ポート（通常 22）。"
+      },
+      "server_port": {
+        "label": "サーバーポート",
+        "description": "認識サーバーがサーバー上で待ち受けるポート。"
+      },
+      "caret_port": {
+        "label": "カーソルヘルパーのポート",
+        "description": "サーバー上のカーソルヘルパーのポート。"
+      },
+      "identity_file": {
+        "label": "SSH 鍵ファイル",
+        "description": "サインインに使う秘密鍵。空欄なら、このアプリの鍵があればそれを、なければ SSH の既定値を使います。"
+      },
+      "ssh_path": {
+        "label": "ssh プログラム",
+        "description": "ssh のパス。空欄なら自動検出します。",
+        "missing": "ssh が見つかりません"
+      },
+      "host_key": {
+        "label": "サーバーの鍵",
+        "description": "ペアリングコードに含まれるサーバーの SSH ホスト鍵。設定すると、鍵の異なるサーバーは拒否されます。",
+        "none": "固定なし",
+        "clear": "消去"
+      },
+      "client_key": {
+        "label": "このコンピューターの鍵",
+        "description": "一度だけ承認してください: サーバーのフォルダーで次のコマンドを実行します。",
+        "none": "鍵がまだありません。",
+        "create": "鍵を作成",
+        "copy": "コマンドをコピー",
+        "copied": "コピーしました"
+      },
+      "test": {
+        "button": "接続をテスト",
+        "running": "テスト中…",
+        "connected": "{{connect}} ms で接続、サーバーは {{roundTrip}} ms で応答しました。",
+        "oldServer": "サーバーは旧バージョンのため詳細を返しません。",
+        "loaded": "モデルは読み込み済みです。",
+        "sleeping": "モデルはアンロード中です。最初の音声入力で読み込まれます（数秒）。",
+        "failed": "接続に失敗しました: {{error}}"
+      },
+      "save": "保存",
+      "revert": "元に戻す",
+      "saved": "保存しました。",
+      "automatic": "自動"
+    },
+    "cloudAsr": {
+      "intro": "Recognize speech with a public cloud speech-to-text service of your choice (OpenAI, Azure, Google, Deepgram, AssemblyAI, ElevenLabs, Groq, Mistral, Alibaba Qwen3-ASR, SiliconFlow, or any OpenAI-compatible server). Each recording is uploaded once when it ends; there is no live preview.",
+      "privacy": "Your audio leaves this computer and is processed under the provider's terms. API keys are stored only in this computer's settings.",
+      "saved": "Saved.",
+      "save": "Save",
+      "revert": "Revert",
+      "groups": {
+        "recognition": "Recognition",
+        "service": "Service"
+      },
+      "enabled": {
+        "label": "Use cloud recognition",
+        "description": "Send dictation to the service below instead of recognizing on this computer or a remote server."
+      },
+      "provider": {
+        "label": "Provider",
+        "description": "Endpoint, model and key are remembered per provider."
+      },
+      "base_url": {
+        "label": "Endpoint",
+        "description": "Leave empty for the default. Change it for another region, a proxy, or a compatible server."
+      },
+      "model": {
+        "label": "Model",
+        "description": "Leave empty for the default model."
+      },
+      "api_key": {
+        "label": "API key",
+        "description": "Required by this provider.",
+        "optional": "Optional: only if your server asks for one.",
+        "placeholder": "Paste the key",
+        "saved": "Saved (type to replace)",
+        "get": "Get a key"
+      },
+      "timeout": {
+        "label": "Timeout (s)",
+        "description": "Longest wait for one recognition, upload included."
+      },
+      "test": {
+        "button": "Test",
+        "running": "Sending a one-second test sound…",
+        "failed": "Test failed: {{error}}",
+        "ok": "Works: answered in {{ms}} ms (recognized: {{text}})."
+      }
     }
   },
   "footer": {
@@ -982,7 +1170,11 @@
   "overlay": {
     "transcribing": "文字起こし中…",
     "processing": "処理中…",
-    "loadingModel": "モデルを読み込み中…"
+    "loadingModel": "モデルを読み込み中…",
+    "remoteWaking": "サーバーのモデルを起動中…",
+    "speakNow": "どうぞ",
+    "refineOn": "この入力を整形します · クリックでスキップ",
+    "refineOff": "この入力は整形しません · クリックで整形"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} が1個のショートカットをブロックしている可能性があります",

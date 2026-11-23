@@ -1,4 +1,4 @@
-use crate::settings::{PostProcessApiFormat, PostProcessProvider};
+use crate::settings::{PostProcessApiFormat, PostProcessAuth, PostProcessProvider};
 use log::{debug, error, info};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE, REFERER, USER_AGENT};
 use serde::{Deserialize, Serialize};
@@ -195,22 +195,21 @@ fn build_headers(provider: &PostProcessProvider, api_key: &str) -> Result<Header
     );
     headers.insert("X-Title", HeaderValue::from_static("Handy"));
 
-    // Provider-specific auth headers
-    if !api_key.is_empty() {
-        if provider.api_format == PostProcessApiFormat::Anthropic {
-            headers.insert(
-                "x-api-key",
-                HeaderValue::from_str(api_key)
-                    .map_err(|e| format!("Invalid API key header value: {}", e))?,
-            );
-            headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
-        } else {
-            headers.insert(
-                AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {}", api_key))
-                    .map_err(|e| format!("Invalid authorization header value: {}", e))?,
-            );
-        }
+    if provider.api_format == PostProcessApiFormat::Anthropic {
+        headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+    }
+    if !api_key.is_empty() && provider.auth != PostProcessAuth::None {
+        let (name, value) = match (provider.auth, provider.api_format) {
+            (PostProcessAuth::ApiKey, _) => ("api-key", api_key.to_string()),
+            (PostProcessAuth::Auto, PostProcessApiFormat::Anthropic) => {
+                ("x-api-key", api_key.to_string())
+            }
+            _ => ("authorization", format!("Bearer {api_key}")),
+        };
+        let mut value = HeaderValue::from_str(&value)
+            .map_err(|_| "Invalid authentication header value".to_string())?;
+        value.set_sensitive(true);
+        headers.insert(name, value);
     }
 
     Ok(headers)
@@ -242,12 +241,42 @@ fn shared_client() -> Result<&'static reqwest::Client, String> {
         return Ok(client);
     }
     let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
         .pool_idle_timeout(Duration::from_secs(30))
         .tcp_keepalive(Duration::from_secs(15))
         .connect_timeout(Duration::from_secs(10))
         .build()
         .map_err(|e| report_reqwest_error("Failed to build HTTP client", &e))?;
     Ok(SHARED.get_or_init(|| client))
+}
+
+/// Opens a pooled connection to the post-processing provider while the user is still speaking, so
+/// the request after the recording skips DNS, proxy CONNECT and TLS. After the pool's idle timeout
+/// the next request can reuse the connection instead of repeating network setup.
+pub fn prewarm(provider: &PostProcessProvider) {
+    let url = provider.base_url.trim_end_matches('/').to_string();
+    if !url.starts_with("http") {
+        return;
+    }
+    let Ok(client) = shared_client() else {
+        return;
+    };
+    tauri::async_runtime::spawn(async move {
+        let started = std::time::Instant::now();
+        let result = client
+            .head(&url)
+            .timeout(Duration::from_secs(10))
+            .send()
+            .await;
+        debug!(
+            "LLM connection pre-warm: {} in {:?}",
+            match &result {
+                Ok(r) => r.status().to_string(),
+                Err(e) => format!("failed ({})", reqwest_error_kinds(e)),
+            },
+            started.elapsed()
+        );
+    });
 }
 
 /// Create an HTTP client with provider-specific headers
@@ -721,6 +750,7 @@ mod tests {
             models_endpoint: None,
             supports_structured_output: false,
             api_format: PostProcessApiFormat::OpenAi,
+            auth: PostProcessAuth::Auto,
         }
     }
 
@@ -761,6 +791,36 @@ mod tests {
         });
 
         format!("http://{address}")
+    }
+
+    #[tokio::test]
+    async fn authenticated_requests_do_not_follow_redirects() {
+        let target = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let source = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", source.local_addr().unwrap());
+        let location = format!("http://{}", target.local_addr().unwrap());
+        let worker = tokio::spawn(async move {
+            let (mut stream, _) = source.accept().await.unwrap();
+            let mut request = [0; 4096];
+            stream.read(&mut request).await.unwrap();
+            stream.write_all(format!("HTTP/1.1 307 Temporary Redirect\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").as_bytes()).await.unwrap();
+        });
+        let mut endpoint = provider("custom", &base);
+        endpoint.auth = PostProcessAuth::ApiKey;
+        let response = create_client(&endpoint, "test-key")
+            .unwrap()
+            .get(&base)
+            .timeout(Duration::from_secs(1))
+            .send()
+            .await
+            .unwrap();
+        worker.await.unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::TEMPORARY_REDIRECT);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), target.accept())
+                .await
+                .is_err()
+        );
     }
 
     #[test]
@@ -913,7 +973,30 @@ mod tests {
         let headers =
             build_headers(&provider("custom", "http://localhost:11434/v1"), "key").unwrap();
         assert_eq!(headers[AUTHORIZATION], "Bearer key");
+        assert!(headers.get("api-key").is_none());
         assert!(headers.get("x-api-key").is_none());
+    }
+
+    #[test]
+    fn authentication_is_explicit_and_never_duplicated() {
+        let mut p = provider("custom", "https://api.example.com/v1");
+        p.auth = PostProcessAuth::ApiKey;
+        let headers = build_headers(&p, "test-key").unwrap();
+        assert_eq!(headers["api-key"], "test-key");
+        assert!(headers["api-key"].is_sensitive());
+        assert!(!headers.contains_key(AUTHORIZATION));
+
+        p.auth = PostProcessAuth::None;
+        let headers = build_headers(&p, "test-key").unwrap();
+        assert!(!headers.contains_key("api-key"));
+        assert!(!headers.contains_key(AUTHORIZATION));
+
+        p.auth = PostProcessAuth::Bearer;
+        p.api_format = PostProcessApiFormat::Anthropic;
+        let headers = build_headers(&p, "test-key").unwrap();
+        assert_eq!(headers[AUTHORIZATION], "Bearer test-key");
+        assert!(!headers.contains_key("x-api-key"));
+        assert!(build_headers(&p, "invalid\r\nkey").is_err());
     }
 
     #[test]

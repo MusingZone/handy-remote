@@ -1155,13 +1155,14 @@ pub fn change_post_process_base_url_setting(
         .post_process_provider_mut(&provider_id)
         .expect("Provider looked up above must exist");
 
-    if provider.id != "custom" {
+    if !provider.allow_base_url_edit {
         return Err(format!(
             "Provider '{}' does not allow editing the base URL",
             label
         ));
     }
 
+    crate::refine::validate_endpoint_url(&base_url)?;
     provider.base_url = base_url;
     settings::write_settings(&app, settings);
     Ok(())
@@ -1179,7 +1180,7 @@ pub fn change_post_process_api_format_setting(
         .post_process_provider_mut(&provider_id)
         .ok_or_else(|| format!("Provider '{}' not found", provider_id))?;
 
-    if provider.id != "custom" {
+    if !crate::refine::is_user_endpoint(&provider.id) {
         return Err(format!(
             "Provider '{}' does not allow changing the API format",
             provider.label
@@ -1355,7 +1356,10 @@ pub async fn fetch_post_process_models(
         .unwrap_or_default();
 
     // Skip fetching if no API key for providers that typically need one
-    if api_key.trim().is_empty() && provider.id != "custom" {
+    if api_key.trim().is_empty()
+        && provider.auth != settings::PostProcessAuth::None
+        && !crate::refine::key_optional(&provider.id)
+    {
         return Err(format!(
             "API key is required for {}. Please add an API key to list available models.",
             provider.label

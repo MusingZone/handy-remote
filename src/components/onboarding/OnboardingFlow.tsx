@@ -31,6 +31,8 @@ interface OnboardingFlowProps {
   previewStep?: OnboardingStep;
   /** Called after the last screen, to show Settings. */
   onComplete: () => void;
+  /** Fork: skip the local model and finish onboarding to set up a recognition server. */
+  onUseServer?: () => void;
 }
 
 // The backend's chinese_script values for the script picked on Welcome.
@@ -45,6 +47,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   preview = false,
   previewStep,
   onComplete,
+  onUseServer,
 }) => {
   const { i18n } = useTranslation();
   const store = useOnboardingStore();
@@ -148,13 +151,14 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     if (i > 0) go(steps[i - 1]);
   };
 
-  const finish = async () => {
+  const finish = async (useServer = false) => {
     // Saved only now: each login item change posts a macOS notification.
     if (!preview) {
       await updateSetting("autostart_enabled", store.atLogin);
       await commands.completeOnboarding();
     }
-    onComplete();
+    if (useServer && onUseServer) onUseServer();
+    else onComplete();
     // After Settings replaces the flow, so Welcome doesn't flash.
     if (!preview) clearOnboardingProgress();
   };
@@ -212,6 +216,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           models={models}
           onBack={store.returnTo ? () => go(store.returnTo!) : back}
           onChoose={chooseModel}
+          onUseServer={
+            onUseServer && !store.returnTo ? () => finish(true) : undefined
+          }
         />
       );
     case "demo":
@@ -247,7 +254,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           onBack={() => moveScreens("out", back)}
           onArrive={() => go("done")}
           onUnfinish={() => go("try")}
-          onDone={finish}
+          onDone={() => finish()}
         />
       );
   }

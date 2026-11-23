@@ -10,7 +10,13 @@
     "secureInputWarning": "⚠ Бързите клавиши са блокирани от Secure Input",
     "language": "Език",
     "autoLanguage": "Автоматично",
-    "otherLanguages": "Други езици"
+    "otherLanguages": "Други езици",
+    "voiceReview": "● Преглед на предложения ({count} чакат)",
+    "voiceAnalyzing": "Анализиране на отзива ви…",
+    "voiceNoPending": "Няма чакащи предложения",
+    "voiceTooltipPending": "Чакащи предложения за диктовка: {count} (щракнете върху иконата)",
+    "voiceReport": "Докладване на последната диктовка…",
+    "voiceGuide": "Ръководство за отзиви за диктовка"
   },
   "sidebar": {
     "general": "Общи",
@@ -19,7 +25,9 @@
     "postProcessing": "Постобработка",
     "history": "История",
     "debug": "Отстраняване",
-    "about": "За приложението"
+    "about": "За приложението",
+    "remote": "Отдалечено",
+    "cloud": "Cloud"
   },
   "onboarding": {
     "customModelDescription": "Не се поддържа официално",
@@ -144,6 +152,7 @@
       },
       "model": "Модел",
       "showAll": "Покажи всички {{count}} модела",
+      "useServer": "Имам сървър Handy Remote",
       "download": "Изтегли {{size}}",
       "downloadInstead": "Изтегли {{size}} вместо това",
       "pauses": "{{name}} прави пауза при {{percent}}%",
@@ -666,6 +675,52 @@
           "placeholderWithOptions": "Търсене или избор на модел",
           "placeholderNoOptions": "Въведете име на модел",
           "refreshModels": "Опресняване на моделите"
+        },
+        "endpoint": {
+          "import": "Import endpoints",
+          "imported": "Imported {{count}} endpoints",
+          "importFailed": "Could not import endpoints",
+          "auth": "Authentication",
+          "authDescription": "Send only the selected authentication header. Automatic uses Bearer for OpenAI and x-api-key for Anthropic.",
+          "authFailed": "Could not save authentication",
+          "authOptions": {
+            "auto": "Automatic",
+            "bearer": "Bearer token",
+            "api_key": "api-key header",
+            "none": "None"
+          }
+        }
+      },
+      "refine": {
+        "title": "Refine with a language model",
+        "always": {
+          "label": "Refine every dictation",
+          "description": "Send every dictation through the model and prompt above before it is pasted, not only the post-processing shortcut. Live pasting while you speak is turned off, and pasting waits for the model."
+        },
+        "detect": {
+          "label": "Local models",
+          "description": "Find language model servers running on this computer (Ollama, LM Studio, llama.cpp, Foundry Local, OpenVINO Model Server, Lemonade) and the Copilot bridge. Text stays on this computer, except through the Copilot bridge, which passes it to GitHub Copilot.",
+          "button": "Find local models",
+          "running": "Searching…",
+          "none": "No local model server answered. Start one (for example Ollama with a small instruct model such as qwen2.5:3b) and search again.",
+          "recommended": "recommended",
+          "use": "Use"
+        },
+        "benchmark": {
+          "label": "Speed test",
+          "description": "Run the selected provider, model and prompt on a sample dictation (one warm-up, then three timed runs) and show the result.",
+          "button": "Run speed test",
+          "running": "Testing…",
+          "result": "{{model}}: median {{ms}} ms ({{runs}} ms)"
+        },
+        "rules": {
+          "label": "My rules",
+          "description": "Your own instructions for the model, one per line, such as how to write floors, numbers or product names. They are added to the selected prompt for every dictation and take priority over its rules. Lines starting with # are comments. The file is read on every dictation, so you can also edit it in any editor or keep it in a synced folder. Your custom words are always kept exactly as written.",
+          "placeholder": "# One rule per line, for example:\nWrite floors as digits: 三楼 → 3楼\nAlways write \"Copilot\" with a capital C",
+          "save": "Save rules",
+          "saved": "Saved, {{count}} rules in use.",
+          "file": "Rules file",
+          "useFile": "Use this file"
         }
       },
       "prompts": {
@@ -898,6 +953,139 @@
           "details": "Handy използва ggml за бързо локално реч-към-текст. Благодарности на Georgi Gerganov и сътрудниците за отличната работа."
         }
       }
+    },
+    "remote": {
+      "intro": "Разпознаването се извършва на сървър Handy Remote, например по-мощен компютър в мрежата, достъпен чрез SSH. Докато е включено, локалните модели не се използват.",
+      "guide": "Ръководство за настройка",
+      "groups": {
+        "recognition": "Разпознаване",
+        "connection": "Връзка",
+        "key": "Ключ за достъп"
+      },
+      "enabled": {
+        "label": "Използване на отдалечен сървър",
+        "description": "Диктовката се разпознава на сървъра по-долу вместо на този компютър."
+      },
+      "incremental_paste": {
+        "label": "Поставяне по време на говорене",
+        "description": "Поставя всяко завършено изречение още докато записвате."
+      },
+      "rdp_caret": {
+        "label": "Следване на курсора в Отдалечен работен плот",
+        "description": "Когато прозорец на Отдалечен работен плот е отпред, наслагването се показва под курсора на приложението в него. Изисква помощника за курсора на сървъра."
+      },
+      "rdp_dictation": {
+        "label": "Диктуване в отдалечения работен плот",
+        "description": "Когато прозорец на отдалечен работен плот е отпред, клавишната комбинация за диктуване стартира Handy в отдалечената сесия, който записва пренасочения микрофон и поставя текста там. Изисква помощника за курсора на сървъра; иначе диктува тук."
+      },
+      "pairing": {
+        "label": "Код за сдвояване",
+        "description": "Поставете кода, отпечатан от \"doctor.py pair\" на сървъра, за да попълните полетата по-долу.",
+        "apply": "Приложи",
+        "applied": "Попълнено от кода за сдвояване. Тествайте, после запазете.",
+        "invalid": "Невалиден код за сдвояване: {{error}}"
+      },
+      "host": {
+        "label": "Сървър",
+        "description": "Име на хост или адрес на сървъра. localhost, ако сървърът работи на този компютър."
+      },
+      "user": {
+        "label": "SSH потребител",
+        "description": "Акаунт за вход в сървъра."
+      },
+      "ssh_port": {
+        "label": "SSH порт",
+        "description": "SSH порт на сървъра, обикновено 22."
+      },
+      "server_port": {
+        "label": "Порт на сървъра",
+        "description": "Порт, на който слуша сървърът за разпознаване, на самия сървър."
+      },
+      "caret_port": {
+        "label": "Порт на помощника за курсора",
+        "description": "Порт на помощника за курсора на сървъра."
+      },
+      "identity_file": {
+        "label": "Файл с SSH ключ",
+        "description": "Частен ключ за вход. Празно: собственият ключ на приложението, ако съществува, иначе настройките по подразбиране на SSH."
+      },
+      "ssh_path": {
+        "label": "Програма ssh",
+        "description": "Път до ssh. Празно: автоматично откриване.",
+        "missing": "ssh не е намерен"
+      },
+      "host_key": {
+        "label": "Ключ на сървъра",
+        "description": "SSH ключът на хоста на сървъра от кода за сдвояване. Ако е зададен, сървър с друг ключ се отхвърля.",
+        "none": "Не е фиксиран",
+        "clear": "Изчисти"
+      },
+      "client_key": {
+        "label": "Ключ на този компютър",
+        "description": "Разрешете ключа еднократно: изпълнете командата по-долу в папката на сървъра.",
+        "none": "Още няма ключ.",
+        "create": "Създай ключ",
+        "copy": "Копирай командата",
+        "copied": "Копирано"
+      },
+      "test": {
+        "button": "Тест на връзката",
+        "running": "Тестване…",
+        "connected": "Свързано за {{connect}} ms; сървърът отговори за {{roundTrip}} ms.",
+        "oldServer": "Сървърът е по-стара версия и не дава подробности.",
+        "loaded": "Моделите са заредени.",
+        "sleeping": "Моделите са разтоварени; зареждат се при първата диктовка (няколко секунди).",
+        "failed": "Неуспешна връзка: {{error}}"
+      },
+      "save": "Запази",
+      "revert": "Върни",
+      "saved": "Запазено.",
+      "automatic": "Автоматично"
+    },
+    "cloudAsr": {
+      "intro": "Recognize speech with a public cloud speech-to-text service of your choice (OpenAI, Azure, Google, Deepgram, AssemblyAI, ElevenLabs, Groq, Mistral, Alibaba Qwen3-ASR, SiliconFlow, or any OpenAI-compatible server). Each recording is uploaded once when it ends; there is no live preview.",
+      "privacy": "Your audio leaves this computer and is processed under the provider's terms. API keys are stored only in this computer's settings.",
+      "saved": "Saved.",
+      "save": "Save",
+      "revert": "Revert",
+      "groups": {
+        "recognition": "Recognition",
+        "service": "Service"
+      },
+      "enabled": {
+        "label": "Use cloud recognition",
+        "description": "Send dictation to the service below instead of recognizing on this computer or a remote server."
+      },
+      "provider": {
+        "label": "Provider",
+        "description": "Endpoint, model and key are remembered per provider."
+      },
+      "base_url": {
+        "label": "Endpoint",
+        "description": "Leave empty for the default. Change it for another region, a proxy, or a compatible server."
+      },
+      "model": {
+        "label": "Model",
+        "description": "Leave empty for the default model."
+      },
+      "api_key": {
+        "label": "API key",
+        "description": "Required by this provider.",
+        "optional": "Optional: only if your server asks for one.",
+        "placeholder": "Paste the key",
+        "saved": "Saved (type to replace)",
+        "get": "Get a key"
+      },
+      "timeout": {
+        "label": "Timeout (s)",
+        "description": "Longest wait for one recognition, upload included."
+      },
+      "test": {
+        "button": "Test",
+        "running": "Sending a one-second test sound…",
+        "failed": "Test failed: {{error}}",
+        "ok": "Works: answered in {{ms}} ms (recognized: {{text}})."
+      }
     }
   },
   "footer": {
@@ -982,7 +1170,11 @@
   "overlay": {
     "transcribing": "Транскрибиране...",
     "processing": "Обработка...",
-    "loadingModel": "Зареждане на модела..."
+    "loadingModel": "Зареждане на модела...",
+    "remoteWaking": "Събуждане на моделите на сървъра…",
+    "speakNow": "Говорете",
+    "refineOn": "Тази диктовка ще бъде изгладена · щракнете, за да пропуснете",
+    "refineOff": "Тази диктовка няма да бъде изгладена · щракнете, за да я изгладите"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} може да блокира 1 бърз клавиш",

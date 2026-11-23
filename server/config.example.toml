@@ -1,0 +1,43 @@
+# Handy Remote server configuration.
+# Copy to <home>\config\config.toml (default home: %LOCALAPPDATA%\handy-remote-server) or let
+# `python doctor.py --write` create it for this machine. Every key is optional; any key can also be
+# set from the environment as HANDY_REMOTE_<KEY>, e.g. HANDY_REMOTE_FINAL_DEVICE=CPU.
+# Section names are only for readability. See docs/remote/CONFIGURATION.md.
+
+[server]
+# Loopback only: clients reach the server through `ssh -W 127.0.0.1:<port>`.
+bind = "127.0.0.1"
+port = 47821
+# How this server appears in Handy. The label defaults to the computer name.
+device_id = "remote"
+device_label = ""
+
+[models]
+# Final text: Qwen3-ASR 1.7B. Device "GPU" (Intel iGPU/dGPU), "CPU", or "AUTO".
+final_model = "qwen3-asr-1.7b-ov-int8"
+final_device = "CPU"
+# Live previews and speculative drafts with Qwen3-ASR 0.6B on an Intel NPU. false = do not use the NPU.
+draft_enabled = false
+draft_model = "qwen3-asr-0.6b-ov-npu-int8"
+preview_model = "sherpa-onnx-streaming-paraformer-bilingual-zh-en"
+vad_model = "silero_vad.onnx"
+punct_model = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8/model.int8.onnx"
+# Hotwords, regex fixes and stream tuning; hot-reloaded. Default: <home>\config\lexicon.json
+lexicon = ""
+
+[lifecycle]
+# Free the memory after this many idle hours (0 = keep the models loaded).
+idle_unload_hours = 2.0
+# Optional daily window "start-end" (hours, local time) in which idle models are unloaded,
+# e.g. "1-9". Empty = no window.
+offline_window = ""
+offline_idle_minutes = 10.0
+load_in_offline_window = false
+# Warm up the real request path after every load.
+warmup = true
+# Keep your first 3-8 s dictation as <home>\config\warmup.wav for later warm-ups. It never leaves this machine.
+warmup_capture = false
+
+[logging]
+log_dir = ""
+log_days = 14

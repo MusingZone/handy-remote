@@ -1,0 +1,185 @@
+name: "remote release"
+# Builds the Windows installer of Handy Remote, signs the updater payload with the maintainer's
+# minisign key, and publishes a GitHub release with latest.json, the server zip and SHA256SUMS.
+# Manual trial builds only. Stable promotion requires a separate, explicit maintainer action.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, e.g. 0.10.1-remote.1 (tag v<version>)"
+        required: true
+        type: string
+      ref:
+        description: "Branch or commit to build"
+        type: string
+        default: main
+
+concurrency:
+  group: remote-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.revision.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+      - id: revision
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  checks:
+    needs: source
+    uses: ./.github/workflows/remote-ci.yml
+    with:
+      ref: ${{ needs.source.outputs.sha }}
+    secrets:
+      SCRUB_PATTERNS: ${{ secrets.SCRUB_PATTERNS }}
+
+  release:
+    needs: [source, checks]
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Check inputs and secrets
+        shell: pwsh
+        env:
+          HAS_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+        run: |
+          if ($env:VERSION -notmatch '^\d+\.\d+\.\d+-remote\.\d+$') { throw "version must look like 0.10.1-remote.1, got '$env:VERSION'" }
+          if ($env:HAS_KEY -ne 'true') { throw 'repository secret TAURI_SIGNING_PRIVATE_KEY is not set' }
+          gh release view "v$env:VERSION" --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) { throw "release v$env:VERSION already exists" }
+          exit 0
+
+      - name: Enable long paths
+        shell: pwsh
+        run: |
+          New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+            -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+          git config --system core.longpaths true
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.source.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Install Vulkan SDK
+        uses: humbletim/install-vulkan-sdk@v1.2
+        with:
+          version: 1.4.309.0
+          cache: true
+
+      - uses: oven-sh/setup-bun@v2
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      # Same as upstream build.yml: bundle the VC++ runtime app-local, so Handy starts on machines
+      # without a current Microsoft redistributable (x64 also needs vcomp140.dll for ggml OpenMP).
+      - name: Locate VC++ runtime redist for app-local bundling
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsRoot = & $vswhere -latest -products * -property installationPath
+          if (-not $vsRoot) { throw "vswhere found no Visual Studio installation" }
+          $redistVersion = (Get-Content (Join-Path $vsRoot "VC\Auxiliary\Build\Microsoft.VCRedistVersion.default.txt")).Trim()
+          $archDir = Join-Path $vsRoot "VC\Redist\MSVC\$redistVersion\x64"
+          $crt = Get-ChildItem $archDir -Directory -Filter "Microsoft.VC*.CRT" | Sort-Object Name | Select-Object -Last 1
+          $omp = Get-ChildItem $archDir -Directory -Filter "Microsoft.VC*.OpenMP" | Sort-Object Name | Select-Object -Last 1
+          if (-not $crt -or -not (Test-Path (Join-Path $crt.FullName "msvcp140.dll"))) { throw "VC++ CRT redist not found under $archDir" }
+          if (-not $omp -or -not (Test-Path (Join-Path $omp.FullName "vcomp140.dll"))) { throw "VC++ OpenMP redist not found under $archDir" }
+          Add-Content -Path $env:GITHUB_ENV -Value "HANDY_VC_REDIST_DIRS=$($crt.FullName);$($omp.FullName)"
+
+      # Same as upstream build.yml: ggml-vulkan needs a findable SPIRV-HeadersConfig.cmake.
+      - name: Install SPIRV-Headers for the Vulkan build
+        shell: pwsh
+        run: |
+          vcpkg install spirv-headers:x64-windows
+          if ($LASTEXITCODE -ne 0) { throw "vcpkg install spirv-headers failed" }
+          $prefix = "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows" -replace '\\','/'
+          $combined = if ($env:CMAKE_PREFIX_PATH) { "$prefix;$env:CMAKE_PREFIX_PATH" } else { $prefix }
+          Add-Content $env:GITHUB_ENV "CMAKE_PREFIX_PATH=$combined"
+
+      - name: Build installer
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $conf = Join-Path $env:RUNNER_TEMP 'release.conf.json'
+          @{ version = $env:VERSION } | ConvertTo-Json | Set-Content -Path $conf -Encoding utf8NoBOM
+          bun run tauri build --bundles nsis --config $conf
+          if ($LASTEXITCODE -ne 0) { throw "tauri build failed" }
+
+      # Adapted from upstream build.yml: the installer must carry the staged runtime DLLs and start.
+      - name: Audit installer contents
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $staged = Get-ChildItem "src-tauri/transcribe-libs" -Filter "*.dll" -ErrorAction SilentlyContinue
+          foreach ($name in @("msvcp140.dll", "vcruntime140.dll", "vcomp140.dll")) {
+            if (-not ($staged | Where-Object { $_.Name -ieq $name })) { throw "staging is missing $name" }
+          }
+          if (-not ($staged | Where-Object { $_.Name -like "*transcribe*" })) { throw "staging is missing transcribe DLLs" }
+          if (-not ($staged | Where-Object { $_.Name -like "*ggml*" })) { throw "staging is missing ggml DLLs" }
+          $pkg = Get-ChildItem "src-tauri/target/release/bundle/nsis" -Filter "*_${env:VERSION}_x64-setup.exe" | Select-Object -First 1
+          if (-not $pkg) { throw "no NSIS installer for $env:VERSION" }
+          $dir = Join-Path $env:RUNNER_TEMP "audit-install"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $p = Start-Process -FilePath $pkg.FullName -ArgumentList @("/S", "/PORTABLE", "/D=$dir") -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "silent portable install failed with exit code $($p.ExitCode)" }
+          $exe = Get-ChildItem $dir -Filter "handy.exe" -Recurse | Select-Object -First 1
+          if (-not $exe) { throw "installed package is missing handy.exe" }
+          foreach ($dll in $staged) {
+            if (-not (Get-ChildItem $dir -Filter $dll.Name -Recurse)) { throw "installed package is missing $($dll.Name)" }
+          }
+          & $exe.FullName --list-devices | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw "handy.exe --list-devices failed" }
+
+      - name: Collect release assets
+        shell: pwsh
+        run: |
+          ./tools/ci/New-ReleaseAssets.ps1 -Version $env:VERSION -Repo $env:GITHUB_REPOSITORY `
+            -BundleDir src-tauri/target/release/bundle/nsis -OutDir dist-release
+
+      - name: Verify release checksums and signature
+        shell: pwsh
+        run: |
+          ./tools/ci/Test-ReleaseAssets.ps1 -Version $env:VERSION -Repo $env:GITHUB_REPOSITORY -AssetsDir dist-release
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Scrub packaged assets and release notes
+        env:
+          SCRUB_PATTERNS: ${{ secrets.SCRUB_PATTERNS }}
+        run: python tools/ci/scrub_check.py --files dist-release
+
+      - name: Scrub installed package contents
+        env:
+          SCRUB_PATTERNS: ${{ secrets.SCRUB_PATTERNS }}
+        run: python tools/ci/scrub_check.py --files "$env:RUNNER_TEMP\audit-install"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: handy-remote-${{ inputs.version }}
+          path: dist-release/
+          retention-days: 14
+
+      - name: Publish release
+        shell: pwsh
+        run: |
+          $assets = Get-ChildItem dist-release -File | Where-Object Name -ne 'release-notes.md' | ForEach-Object FullName
+          gh release create "v$env:VERSION" @assets --repo $env:GITHUB_REPOSITORY --target (git rev-parse HEAD) `
+            --title "Handy Remote $env:VERSION" --notes-file dist-release/release-notes.md --prerelease --latest=false
+          if ($LASTEXITCODE -ne 0) { throw "gh release create failed" }

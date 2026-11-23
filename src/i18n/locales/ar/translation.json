@@ -10,7 +10,13 @@
     "secureInputWarning": "⚠ الاختصارات محجوبة بواسطة Secure Input",
     "language": "اللغة",
     "autoLanguage": "تلقائي",
-    "otherLanguages": "لغات أخرى"
+    "otherLanguages": "لغات أخرى",
+    "voiceReview": "● مراجعة الاقتراحات ({count} بانتظار المراجعة)",
+    "voiceAnalyzing": "جارٍ تحليل ملاحظاتك…",
+    "voiceNoPending": "لا توجد اقتراحات معلّقة",
+    "voiceTooltipPending": "{count} اقتراحات إملاء بانتظار المراجعة (انقر الأيقونة)",
+    "voiceReport": "الإبلاغ عن آخر إملاء…",
+    "voiceGuide": "دليل ملاحظات الإملاء"
   },
   "sidebar": {
     "general": "عام",
@@ -19,7 +25,9 @@
     "postProcessing": "معالجة لاحقة",
     "history": "السجل",
     "debug": "تصحيح الأخطاء",
-    "about": "حول"
+    "about": "حول",
+    "remote": "عن بُعد",
+    "cloud": "Cloud"
   },
   "onboarding": {
     "customModelDescription": "غير مدعوم رسميًا",
@@ -144,6 +152,7 @@
       },
       "model": "النموذج",
       "showAll": "عرض كل النماذج ({{count}})",
+      "useServer": "لديّ خادم Handy Remote",
       "download": "تنزيل {{size}}",
       "downloadInstead": "تنزيل {{size}} بدلًا من ذلك",
       "pauses": "يتوقف {{name}} مؤقتًا عند {{percent}}%",
@@ -666,6 +675,52 @@
           "placeholderWithOptions": "ابحث عن نموذج أو اختره",
           "placeholderNoOptions": "اكتب اسم النموذج",
           "refreshModels": "تحديث النماذج"
+        },
+        "endpoint": {
+          "import": "Import endpoints",
+          "imported": "Imported {{count}} endpoints",
+          "importFailed": "Could not import endpoints",
+          "auth": "Authentication",
+          "authDescription": "Send only the selected authentication header. Automatic uses Bearer for OpenAI and x-api-key for Anthropic.",
+          "authFailed": "Could not save authentication",
+          "authOptions": {
+            "auto": "Automatic",
+            "bearer": "Bearer token",
+            "api_key": "api-key header",
+            "none": "None"
+          }
+        }
+      },
+      "refine": {
+        "title": "Refine with a language model",
+        "always": {
+          "label": "Refine every dictation",
+          "description": "Send every dictation through the model and prompt above before it is pasted, not only the post-processing shortcut. Live pasting while you speak is turned off, and pasting waits for the model."
+        },
+        "detect": {
+          "label": "Local models",
+          "description": "Find language model servers running on this computer (Ollama, LM Studio, llama.cpp, Foundry Local, OpenVINO Model Server, Lemonade) and the Copilot bridge. Text stays on this computer, except through the Copilot bridge, which passes it to GitHub Copilot.",
+          "button": "Find local models",
+          "running": "Searching…",
+          "none": "No local model server answered. Start one (for example Ollama with a small instruct model such as qwen2.5:3b) and search again.",
+          "recommended": "recommended",
+          "use": "Use"
+        },
+        "benchmark": {
+          "label": "Speed test",
+          "description": "Run the selected provider, model and prompt on a sample dictation (one warm-up, then three timed runs) and show the result.",
+          "button": "Run speed test",
+          "running": "Testing…",
+          "result": "{{model}}: median {{ms}} ms ({{runs}} ms)"
+        },
+        "rules": {
+          "label": "My rules",
+          "description": "Your own instructions for the model, one per line, such as how to write floors, numbers or product names. They are added to the selected prompt for every dictation and take priority over its rules. Lines starting with # are comments. The file is read on every dictation, so you can also edit it in any editor or keep it in a synced folder. Your custom words are always kept exactly as written.",
+          "placeholder": "# One rule per line, for example:\nWrite floors as digits: 三楼 → 3楼\nAlways write \"Copilot\" with a capital C",
+          "save": "Save rules",
+          "saved": "Saved, {{count}} rules in use.",
+          "file": "Rules file",
+          "useFile": "Use this file"
         }
       },
       "prompts": {
@@ -898,6 +953,139 @@
           "details": ".يستخدم Handy برنامج ggml لمعالجة سريعة ومحلية لتحويل الكلام إلى نص. شكراً للعمل الرائع الذي قام به Georgi Gerganov والمساهمون"
         }
       }
+    },
+    "remote": {
+      "intro": "تشغيل التعرّف على خادم Handy Remote، مثل حاسوب أقوى في شبكتك، عبر SSH. أثناء التفعيل لا تُستخدم النماذج المحلية.",
+      "guide": "دليل الإعداد",
+      "groups": {
+        "recognition": "التعرّف",
+        "connection": "الاتصال",
+        "key": "مفتاح الوصول"
+      },
+      "enabled": {
+        "label": "استخدام خادم بعيد",
+        "description": "يتم التعرّف على الإملاء على الخادم أدناه بدلًا من هذا الحاسوب."
+      },
+      "incremental_paste": {
+        "label": "اللصق أثناء الكلام",
+        "description": "يلصق كل جملة مكتملة بينما لا يزال التسجيل جاريًا."
+      },
+      "rdp_caret": {
+        "label": "تتبّع المؤشر في سطح المكتب البعيد",
+        "description": "عندما تكون نافذة سطح المكتب البعيد في المقدمة، تظهر الطبقة أسفل مؤشر التطبيق داخلها. يتطلب مساعد المؤشر على الخادم."
+      },
+      "rdp_dictation": {
+        "label": "الإملاء داخل سطح المكتب البعيد",
+        "description": "عندما تكون نافذة سطح المكتب البعيد في المقدمة، يشغّل اختصار الإملاء Handy داخل الجلسة البعيدة، فيسجّل الميكروفون المُعاد توجيهه ويلصق النص هناك. يتطلب مساعد المؤشر على الخادم؛ وإلا يتم الإملاء هنا."
+      },
+      "pairing": {
+        "label": "رمز الإقران",
+        "description": "الصق الرمز الذي يطبعه \"doctor.py pair\" على الخادم لملء الحقول أدناه.",
+        "apply": "تطبيق",
+        "applied": "تم الملء من رمز الإقران. اختبر ثم احفظ.",
+        "invalid": "رمز إقران غير صالح: {{error}}"
+      },
+      "host": {
+        "label": "الخادم",
+        "description": "اسم المضيف أو عنوان الخادم. استخدم localhost إذا كان الخادم يعمل على هذا الحاسوب."
+      },
+      "user": {
+        "label": "مستخدم SSH",
+        "description": "الحساب المستخدم لتسجيل الدخول إلى الخادم."
+      },
+      "ssh_port": {
+        "label": "منفذ SSH",
+        "description": "منفذ SSH للخادم، عادةً 22."
+      },
+      "server_port": {
+        "label": "منفذ الخادم",
+        "description": "المنفذ الذي يستمع عليه خادم التعرّف، على الخادم نفسه."
+      },
+      "caret_port": {
+        "label": "منفذ مساعد المؤشر",
+        "description": "منفذ مساعد المؤشر على الخادم."
+      },
+      "identity_file": {
+        "label": "ملف مفتاح SSH",
+        "description": "المفتاح الخاص لتسجيل الدخول. فارغ: مفتاح هذا التطبيق إن وُجد، وإلا إعدادات SSH الافتراضية."
+      },
+      "ssh_path": {
+        "label": "برنامج ssh",
+        "description": "مسار ssh. فارغ: يُكتشف تلقائيًا.",
+        "missing": "لم يُعثر على ssh"
+      },
+      "host_key": {
+        "label": "مفتاح الخادم",
+        "description": "مفتاح مضيف SSH للخادم من رمز الإقران. عند تعيينه يُرفض أي خادم بمفتاح مختلف.",
+        "none": "غير مثبّت",
+        "clear": "مسح"
+      },
+      "client_key": {
+        "label": "مفتاح هذا الحاسوب",
+        "description": "صرّح لهذا المفتاح مرة واحدة: شغّل الأمر أدناه في مجلد الخادم.",
+        "none": "لا يوجد مفتاح بعد.",
+        "create": "إنشاء مفتاح",
+        "copy": "نسخ الأمر",
+        "copied": "تم النسخ"
+      },
+      "test": {
+        "button": "اختبار الاتصال",
+        "running": "جارٍ الاختبار…",
+        "connected": "تم الاتصال خلال {{connect}} مللي ثانية؛ ردّ الخادم خلال {{roundTrip}} مللي ثانية.",
+        "oldServer": "الخادم إصدار أقدم ولا يقدّم تفاصيل.",
+        "loaded": "النماذج محمّلة.",
+        "sleeping": "النماذج غير محمّلة؛ ستُحمّل عند أول إملاء (بضع ثوانٍ).",
+        "failed": "فشل الاتصال: {{error}}"
+      },
+      "save": "حفظ",
+      "revert": "تراجع",
+      "saved": "تم الحفظ.",
+      "automatic": "تلقائي"
+    },
+    "cloudAsr": {
+      "intro": "Recognize speech with a public cloud speech-to-text service of your choice (OpenAI, Azure, Google, Deepgram, AssemblyAI, ElevenLabs, Groq, Mistral, Alibaba Qwen3-ASR, SiliconFlow, or any OpenAI-compatible server). Each recording is uploaded once when it ends; there is no live preview.",
+      "privacy": "Your audio leaves this computer and is processed under the provider's terms. API keys are stored only in this computer's settings.",
+      "saved": "Saved.",
+      "save": "Save",
+      "revert": "Revert",
+      "groups": {
+        "recognition": "Recognition",
+        "service": "Service"
+      },
+      "enabled": {
+        "label": "Use cloud recognition",
+        "description": "Send dictation to the service below instead of recognizing on this computer or a remote server."
+      },
+      "provider": {
+        "label": "Provider",
+        "description": "Endpoint, model and key are remembered per provider."
+      },
+      "base_url": {
+        "label": "Endpoint",
+        "description": "Leave empty for the default. Change it for another region, a proxy, or a compatible server."
+      },
+      "model": {
+        "label": "Model",
+        "description": "Leave empty for the default model."
+      },
+      "api_key": {
+        "label": "API key",
+        "description": "Required by this provider.",
+        "optional": "Optional: only if your server asks for one.",
+        "placeholder": "Paste the key",
+        "saved": "Saved (type to replace)",
+        "get": "Get a key"
+      },
+      "timeout": {
+        "label": "Timeout (s)",
+        "description": "Longest wait for one recognition, upload included."
+      },
+      "test": {
+        "button": "Test",
+        "running": "Sending a one-second test sound…",
+        "failed": "Test failed: {{error}}",
+        "ok": "Works: answered in {{ms}} ms (recognized: {{text}})."
+      }
     }
   },
   "footer": {
@@ -982,7 +1170,11 @@
   "overlay": {
     "transcribing": "جاري التفريغ...",
     "processing": "جاري المعالجة...",
-    "loadingModel": "جارٍ تحميل النموذج..."
+    "loadingModel": "جارٍ تحميل النموذج...",
+    "remoteWaking": "جارٍ إيقاظ النماذج على الخادم…",
+    "speakNow": "تحدّث الآن",
+    "refineOn": "سيتم تحسين هذا الإملاء · انقر للتخطي",
+    "refineOff": "لن يتم تحسين هذا الإملاء · انقر للتحسين"
   },
   "secureInput": {
     "blockedWithCulprit_one": "قد يحظر {{name}} اختصارًا واحدًا",

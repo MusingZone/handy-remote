@@ -10,7 +10,13 @@
     "secureInputWarning": "⚠ Sneltoetsen geblokkeerd door Secure Input",
     "language": "Taal",
     "autoLanguage": "Automatisch",
-    "otherLanguages": "Andere talen"
+    "otherLanguages": "Andere talen",
+    "voiceReview": "● Suggesties bekijken ({count} wachtend)",
+    "voiceAnalyzing": "Je feedback wordt geanalyseerd…",
+    "voiceNoPending": "Geen wachtende suggesties",
+    "voiceTooltipPending": "{count} dicteersuggesties wachten (klik op het pictogram)",
+    "voiceReport": "Laatste dictaat melden…",
+    "voiceGuide": "Handleiding dicteerfeedback"
   },
   "sidebar": {
     "general": "Algemeen",
@@ -19,7 +25,9 @@
     "postProcessing": "Naverwerking",
     "history": "Geschiedenis",
     "debug": "Probleemoplossing",
-    "about": "Over Handy"
+    "about": "Over Handy",
+    "remote": "Extern",
+    "cloud": "Cloud"
   },
   "onboarding": {
     "customModelDescription": "Niet officieel ondersteund",
@@ -144,6 +152,7 @@
       },
       "model": "Model",
       "showAll": "Alle {{count}} modellen tonen",
+      "useServer": "Ik heb een Handy Remote-server",
       "download": "{{size}} downloaden",
       "downloadInstead": "In plaats daarvan {{size}} downloaden",
       "pauses": "{{name}} pauzeert bij {{percent}}%",
@@ -666,6 +675,52 @@
           "placeholderWithOptions": "Zoek of selecteer een model",
           "placeholderNoOptions": "Typ een modelnaam",
           "refreshModels": "Modellen verversen"
+        },
+        "endpoint": {
+          "import": "Import endpoints",
+          "imported": "Imported {{count}} endpoints",
+          "importFailed": "Could not import endpoints",
+          "auth": "Authentication",
+          "authDescription": "Send only the selected authentication header. Automatic uses Bearer for OpenAI and x-api-key for Anthropic.",
+          "authFailed": "Could not save authentication",
+          "authOptions": {
+            "auto": "Automatic",
+            "bearer": "Bearer token",
+            "api_key": "api-key header",
+            "none": "None"
+          }
+        }
+      },
+      "refine": {
+        "title": "Refine with a language model",
+        "always": {
+          "label": "Refine every dictation",
+          "description": "Send every dictation through the model and prompt above before it is pasted, not only the post-processing shortcut. Live pasting while you speak is turned off, and pasting waits for the model."
+        },
+        "detect": {
+          "label": "Local models",
+          "description": "Find language model servers running on this computer (Ollama, LM Studio, llama.cpp, Foundry Local, OpenVINO Model Server, Lemonade) and the Copilot bridge. Text stays on this computer, except through the Copilot bridge, which passes it to GitHub Copilot.",
+          "button": "Find local models",
+          "running": "Searching…",
+          "none": "No local model server answered. Start one (for example Ollama with a small instruct model such as qwen2.5:3b) and search again.",
+          "recommended": "recommended",
+          "use": "Use"
+        },
+        "benchmark": {
+          "label": "Speed test",
+          "description": "Run the selected provider, model and prompt on a sample dictation (one warm-up, then three timed runs) and show the result.",
+          "button": "Run speed test",
+          "running": "Testing…",
+          "result": "{{model}}: median {{ms}} ms ({{runs}} ms)"
+        },
+        "rules": {
+          "label": "My rules",
+          "description": "Your own instructions for the model, one per line, such as how to write floors, numbers or product names. They are added to the selected prompt for every dictation and take priority over its rules. Lines starting with # are comments. The file is read on every dictation, so you can also edit it in any editor or keep it in a synced folder. Your custom words are always kept exactly as written.",
+          "placeholder": "# One rule per line, for example:\nWrite floors as digits: 三楼 → 3楼\nAlways write \"Copilot\" with a capital C",
+          "save": "Save rules",
+          "saved": "Saved, {{count}} rules in use.",
+          "file": "Rules file",
+          "useFile": "Use this file"
         }
       },
       "prompts": {
@@ -898,6 +953,139 @@
           "details": "Handy's lokale spraak-naar-tekst is gebouwd op transcribe.cpp en ggml. Met dank aan het geweldige werk van Georgi Gerganov en alle bijdragers."
         }
       }
+    },
+    "remote": {
+      "intro": "Laat de herkenning draaien op een Handy Remote-server, bijvoorbeeld een krachtigere computer in je netwerk, bereikbaar via SSH. Zolang dit aan staat, worden de lokale modellen niet gebruikt.",
+      "guide": "Installatiehandleiding",
+      "groups": {
+        "recognition": "Herkenning",
+        "connection": "Verbinding",
+        "key": "Toegangssleutel"
+      },
+      "enabled": {
+        "label": "Externe server gebruiken",
+        "description": "Dictaat wordt herkend op de server hieronder in plaats van op deze computer."
+      },
+      "incremental_paste": {
+        "label": "Plakken tijdens het spreken",
+        "description": "Plak elke voltooide zin terwijl je nog opneemt."
+      },
+      "rdp_caret": {
+        "label": "Cursor volgen in Extern bureaublad",
+        "description": "Als een venster van Extern bureaublad vooraan staat, verschijnt de overlay onder de cursor van de app daarin. Vereist de cursorhulp op de server."
+      },
+      "rdp_dictation": {
+        "label": "Dicteren in Extern bureaublad",
+        "description": "Als een venster van Extern bureaublad vooraan staat, start de dicteersneltoets Handy in de externe sessie, die de omgeleide microfoon opneemt en daar plakt. Vereist de cursorhelper op de server; anders wordt hier gedicteerd."
+      },
+      "pairing": {
+        "label": "Koppelcode",
+        "description": "Plak de code die \"doctor.py pair\" op de server toont om de velden hieronder in te vullen.",
+        "apply": "Toepassen",
+        "applied": "Ingevuld vanuit de koppelcode. Test en sla daarna op.",
+        "invalid": "Ongeldige koppelcode: {{error}}"
+      },
+      "host": {
+        "label": "Server",
+        "description": "Hostnaam of adres van de server. localhost als de server op deze computer draait."
+      },
+      "user": {
+        "label": "SSH-gebruiker",
+        "description": "Account om op de server in te loggen."
+      },
+      "ssh_port": {
+        "label": "SSH-poort",
+        "description": "SSH-poort van de server, meestal 22."
+      },
+      "server_port": {
+        "label": "Serverpoort",
+        "description": "Poort waarop de herkenningsserver luistert, op de server zelf."
+      },
+      "caret_port": {
+        "label": "Poort cursorhulp",
+        "description": "Poort van de cursorhulp op de server."
+      },
+      "identity_file": {
+        "label": "SSH-sleutelbestand",
+        "description": "Privésleutel om in te loggen. Leeg: de eigen sleutel van deze app als die bestaat, anders de SSH-standaarden."
+      },
+      "ssh_path": {
+        "label": "ssh-programma",
+        "description": "Pad naar ssh. Leeg: automatisch zoeken.",
+        "missing": "ssh niet gevonden"
+      },
+      "host_key": {
+        "label": "Serversleutel",
+        "description": "SSH-hostsleutel van de server uit de koppelcode. Indien ingesteld, wordt een server met een andere sleutel geweigerd.",
+        "none": "Niet vastgezet",
+        "clear": "Wissen"
+      },
+      "client_key": {
+        "label": "Sleutel van deze computer",
+        "description": "Autoriseer deze sleutel één keer: voer de opdracht hieronder uit in de map van de server.",
+        "none": "Nog geen sleutel.",
+        "create": "Sleutel maken",
+        "copy": "Opdracht kopiëren",
+        "copied": "Gekopieerd"
+      },
+      "test": {
+        "button": "Verbinding testen",
+        "running": "Testen…",
+        "connected": "Verbonden in {{connect}} ms; de server antwoordde in {{roundTrip}} ms.",
+        "oldServer": "De server is een oudere versie en geeft geen details.",
+        "loaded": "Modellen zijn geladen.",
+        "sleeping": "Modellen zijn ontladen; ze laden bij het eerste dictaat (enkele seconden).",
+        "failed": "Verbinding mislukt: {{error}}"
+      },
+      "save": "Opslaan",
+      "revert": "Terugzetten",
+      "saved": "Opgeslagen.",
+      "automatic": "Automatisch"
+    },
+    "cloudAsr": {
+      "intro": "Recognize speech with a public cloud speech-to-text service of your choice (OpenAI, Azure, Google, Deepgram, AssemblyAI, ElevenLabs, Groq, Mistral, Alibaba Qwen3-ASR, SiliconFlow, or any OpenAI-compatible server). Each recording is uploaded once when it ends; there is no live preview.",
+      "privacy": "Your audio leaves this computer and is processed under the provider's terms. API keys are stored only in this computer's settings.",
+      "saved": "Saved.",
+      "save": "Save",
+      "revert": "Revert",
+      "groups": {
+        "recognition": "Recognition",
+        "service": "Service"
+      },
+      "enabled": {
+        "label": "Use cloud recognition",
+        "description": "Send dictation to the service below instead of recognizing on this computer or a remote server."
+      },
+      "provider": {
+        "label": "Provider",
+        "description": "Endpoint, model and key are remembered per provider."
+      },
+      "base_url": {
+        "label": "Endpoint",
+        "description": "Leave empty for the default. Change it for another region, a proxy, or a compatible server."
+      },
+      "model": {
+        "label": "Model",
+        "description": "Leave empty for the default model."
+      },
+      "api_key": {
+        "label": "API key",
+        "description": "Required by this provider.",
+        "optional": "Optional: only if your server asks for one.",
+        "placeholder": "Paste the key",
+        "saved": "Saved (type to replace)",
+        "get": "Get a key"
+      },
+      "timeout": {
+        "label": "Timeout (s)",
+        "description": "Longest wait for one recognition, upload included."
+      },
+      "test": {
+        "button": "Test",
+        "running": "Sending a one-second test sound…",
+        "failed": "Test failed: {{error}}",
+        "ok": "Works: answered in {{ms}} ms (recognized: {{text}})."
+      }
     }
   },
   "footer": {
@@ -982,7 +1170,11 @@
   "overlay": {
     "transcribing": "Transcriberen...",
     "processing": "Verwerken...",
-    "loadingModel": "Model laden..."
+    "loadingModel": "Model laden...",
+    "remoteWaking": "Modellen op de server worden gewekt…",
+    "speakNow": "Spreek nu",
+    "refineOn": "Dit dictaat wordt bijgeschaafd · klik om over te slaan",
+    "refineOff": "Dit dictaat wordt niet bijgeschaafd · klik om bij te schaven"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} blokkeert mogelijk 1 sneltoets",

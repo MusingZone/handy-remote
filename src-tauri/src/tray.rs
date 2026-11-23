@@ -72,6 +72,8 @@ struct MenuInputs {
     update_checks_enabled: bool,
     /// The language submenu, when the selected model has languages to pick.
     language: Option<LanguageMenu>,
+    /// Fork: voice-feedback loop state (pending reviews, analysing, script path).
+    voice: crate::voice_feedback::VoiceFeedback,
 }
 
 /// What the language submenu shows: `(code, name)` entries, with codes as
@@ -237,6 +239,26 @@ pub fn get_icon_path(theme: AppTheme, state: TrayIconState, badge: bool) -> &'st
     }
 }
 
+/// Fork: the idle icon with a dot while voice feedback waits for review (orange) or is being
+/// analysed (blue). A notice badge and the busy icons take precedence.
+fn icon_with_voice_dot(
+    theme: AppTheme,
+    state: TrayIconState,
+    badge: bool,
+    voice: &crate::voice_feedback::VoiceFeedback,
+) -> &'static str {
+    if badge || state != TrayIconState::Idle || voice.script.is_none() {
+        return get_icon_path(theme, state, badge);
+    }
+    match (&theme, voice.pending > 0, voice.analyzing) {
+        (AppTheme::Dark, true, _) => "resources/tray_idle_pending.png",
+        (AppTheme::Light, true, _) => "resources/tray_idle_pending_dark.png",
+        (AppTheme::Dark, false, true) => "resources/tray_idle_analyzing.png",
+        (AppTheme::Light, false, true) => "resources/tray_idle_analyzing_dark.png",
+        _ => get_icon_path(theme, state, badge),
+    }
+}
+
 /// Sets the recording state shown by the tray (icon + Cancel/model menu).
 pub fn set_tray_state(app: &AppHandle, state: TrayIconState) {
     sync_tray_with(app, |inner| inner.icon_state = state);
@@ -381,8 +403,9 @@ fn compute_desired(app: &AppHandle, icon_state: TrayIconState) -> TrayDesired {
             })
     };
 
+    let voice = crate::voice_feedback::current();
     TrayDesired {
-        icon_path: get_icon_path(theme, icon_state, badge),
+        icon_path: icon_with_voice_dot(theme, icon_state, badge, &voice),
         menu: MenuInputs {
             busy: icon_state.is_busy(),
             models_locked,
@@ -394,6 +417,7 @@ fn compute_desired(app: &AppHandle, icon_state: TrayIconState) -> TrayDesired {
             locale: settings.app_language,
             update_checks_enabled: settings.update_checks_enabled,
             language,
+            voice,
         },
     }
 }
@@ -781,6 +805,47 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
         menu.insert(&notice_item, position)?;
         position += 1;
     }
+    // Fork: voice-feedback entries, right after the warnings (they replace a second tray icon).
+    if inputs.voice.script.is_some() {
+        let v = &inputs.voice;
+        let count = v.pending.to_string();
+        let (review_label, review_enabled) = if v.pending > 0 {
+            (strings.voice_review.replace("{count}", &count), true)
+        } else if v.analyzing {
+            (strings.voice_analyzing.clone(), false)
+        } else {
+            (strings.voice_no_pending.clone(), false)
+        };
+        if v.pending > 0 {
+            tooltip = format!(
+                "{tooltip}\n{}",
+                strings.voice_tooltip_pending.replace("{count}", &count)
+            );
+        } else if v.analyzing {
+            tooltip = format!("{tooltip}\n{}", strings.voice_analyzing);
+        }
+        let items = [
+            MenuItem::with_id(
+                app,
+                "voice_review",
+                &review_label,
+                review_enabled,
+                None::<&str>,
+            )?,
+            MenuItem::with_id(
+                app,
+                "voice_report",
+                &strings.voice_report,
+                true,
+                None::<&str>,
+            )?,
+            MenuItem::with_id(app, "voice_guide", &strings.voice_guide, true, None::<&str>)?,
+        ];
+        for item in &items {
+            menu.insert(item, position)?;
+            position += 1;
+        }
+    }
     if position > 2 {
         menu.insert(&separator()?, position)?;
     }
@@ -989,6 +1054,7 @@ mod tests {
             locale: "en".to_string(),
             update_checks_enabled: true,
             language: None,
+            voice: Default::default(),
         }
     }
 
@@ -1045,6 +1111,47 @@ mod tests {
             assert_eq!(
                 get_icon_path(theme.clone(), TrayIconState::Recording, true),
                 get_icon_path(theme, TrayIconState::Recording, false)
+            );
+        }
+    }
+
+    #[test]
+    fn voice_dot_shows_at_idle_without_badge_and_exists() {
+        use super::icon_with_voice_dot;
+        use crate::voice_feedback::VoiceFeedback;
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let pending = VoiceFeedback {
+            pending: 1,
+            analyzing: true,
+            script: Some("x".into()),
+        };
+        let analyzing = VoiceFeedback {
+            pending: 0,
+            analyzing: true,
+            script: Some("x".into()),
+        };
+        for theme in [AppTheme::Dark, AppTheme::Light] {
+            let plain = get_icon_path(theme.clone(), TrayIconState::Idle, false);
+            for (voice, tag) in [(&pending, "pending"), (&analyzing, "analyzing")] {
+                let dotted = icon_with_voice_dot(theme.clone(), TrayIconState::Idle, false, voice);
+                assert!(dotted.contains(tag), "{dotted}");
+                assert!(root.join(dotted).is_file(), "{dotted} is missing");
+            }
+            let no_script = VoiceFeedback {
+                script: None,
+                ..pending.clone()
+            };
+            assert_eq!(
+                icon_with_voice_dot(theme.clone(), TrayIconState::Idle, false, &no_script),
+                plain
+            );
+            assert_eq!(
+                icon_with_voice_dot(theme.clone(), TrayIconState::Recording, false, &pending),
+                get_icon_path(theme.clone(), TrayIconState::Recording, false)
+            );
+            assert_eq!(
+                icon_with_voice_dot(theme.clone(), TrayIconState::Idle, true, &pending),
+                get_icon_path(theme, TrayIconState::Idle, true)
             );
         }
     }

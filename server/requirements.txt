@@ -1,0 +1,6 @@
+# Runtime dependencies of the Handy Remote recognition server (Python 3.12+).
+# OpenVINO 2026.4.1 is the minimum tested release; newer releases are expected to work.
+numpy>=2.5.5
+openvino>=2026.4.1
+sherpa-onnx>=2.0.2
+tokenizers>=0.23.3

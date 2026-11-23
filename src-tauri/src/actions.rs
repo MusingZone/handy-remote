@@ -221,6 +221,7 @@ enum PostProcessOutcome {
 async fn post_process_transcription(
     settings: &AppSettings,
     transcription: &str,
+    user_rules: &str,
 ) -> PostProcessOutcome {
     if is_blank_transcription(transcription) {
         debug!("Post-processing skipped because the transcription is empty");
@@ -262,7 +263,7 @@ async fn post_process_transcription(
         .iter()
         .find(|prompt| prompt.id == selected_prompt_id)
     {
-        Some(prompt) => prompt.prompt.clone(),
+        Some(prompt) => crate::refine::with_user_rules(&prompt.prompt, user_rules),
         None => {
             debug!(
                 "Post-processing skipped because prompt '{}' was not found",
@@ -291,7 +292,8 @@ async fn post_process_transcription(
     // Ask these providers to skip reasoning/thinking — post-processing rarely
     // benefits from it and it adds seconds of latency. llm_client picks the
     // field the endpoint understands and retries without it if rejected.
-    let disable_reasoning = matches!(provider.id.as_str(), "custom" | "openrouter");
+    let disable_reasoning = matches!(provider.id.as_str(), "custom" | "openrouter")
+        || crate::refine::disable_reasoning(&provider.id);
 
     if provider.supports_structured_output {
         debug!("Using structured outputs for provider '{}'", provider.id);
@@ -467,10 +469,11 @@ pub(crate) async fn process_transcription_output(
     let mut post_process_failed = false;
 
     if post_process {
+        let user_rules = crate::refine::prompt_rules(app, &settings);
         // A reply that's blank once cleaned is no better than none.
         let outcome = match tokio::time::timeout(
             POST_PROCESS_TIMEOUT,
-            post_process_transcription(&settings, &final_text),
+            post_process_transcription(&settings, &final_text, &user_rules),
         )
         .await
         {
@@ -565,6 +568,13 @@ impl ShortcutAction for TranscribeAction {
         let plan_started = Instant::now();
         let settings = get_settings(app);
         let is_always_on = settings.always_on_microphone;
+        let refines = crate::refine::wants(&settings, self.post_process);
+        crate::refine::begin_take(app, refines);
+        if refines {
+            if let Some(provider) = settings.active_post_process_provider() {
+                crate::llm_client::prewarm(provider);
+            }
+        }
 
         let selected_model_info = app
             .state::<Arc<ModelManager>>()
@@ -592,6 +602,9 @@ impl ShortcutAction for TranscribeAction {
             long_form: false,
         };
         if live_decode(expected_model, settings.long_form_chunking) != LiveDecode::None {
+            if model_supports_streaming {
+                crate::incremental_paste::begin(app, refines);
+            }
             tm.start_stream();
         }
         let plan_elapsed = plan_started.elapsed();
@@ -736,7 +749,8 @@ impl ShortcutAction for TranscribeAction {
         play_feedback_sound(app, SoundType::Stop);
 
         let binding_id = binding_id.to_string(); // Clone binding_id for the async task
-        let post_process = self.post_process;
+        let post_process = crate::refine::wants(&get_settings(app), self.post_process)
+            && !crate::refine::take_skipped();
         let cancel_generation = rm.cancel_generation();
 
         tauri::async_runtime::spawn(async move {
@@ -838,10 +852,26 @@ impl ShortcutAction for TranscribeAction {
                                     show_processing_overlay(&ah);
                                 }
                             }
-                            let Some(processed) = complete_unless_cancelled(
-                                process_transcription_output(&ah, &transcription, post_process),
-                                || rm.was_cancelled_since(cancel_generation),
-                            )
+                            let output = async {
+                                // The overlay's refine switch can still turn this
+                                // take's rewrite off while it runs: paste the
+                                // transcript at once instead of waiting.
+                                if post_process {
+                                    if let Some(processed) = complete_unless_cancelled(
+                                        process_transcription_output(&ah, &transcription, true),
+                                        crate::refine::take_skipped,
+                                    )
+                                    .await
+                                    {
+                                        return processed;
+                                    }
+                                    debug!("Refine turned off during post-processing; pasting the transcription");
+                                }
+                                process_transcription_output(&ah, &transcription, false).await
+                            };
+                            let Some(processed) = complete_unless_cancelled(output, || {
+                                rm.was_cancelled_since(cancel_generation)
+                            })
                             .await
                             else {
                                 debug!("Transcription operation cancelled during output handling");
@@ -913,46 +943,58 @@ impl ShortcutAction for TranscribeAction {
                                         // UI while this paste ran.
                                         let owns_ui =
                                             || RECORDING_SESSION.load(Ordering::SeqCst) == session;
-                                        let (outcome, notice) =
-                                            match utils::paste(final_text, ah_clone.clone()) {
-                                                Ok(utils::PasteOutcome::Pasted) => {
-                                                    debug!(
-                                                        "Text pasted successfully in {:?}",
-                                                        paste_time.elapsed()
+                                        let finished = crate::incremental_paste::finish(final_text);
+                                        let pasted = if finished.remaining.is_empty() {
+                                            Ok(utils::PasteOutcome::Pasted)
+                                        } else {
+                                            utils::paste(finished.remaining, ah_clone.clone())
+                                        };
+                                        let (outcome, notice) = match pasted {
+                                            Ok(utils::PasteOutcome::Pasted) => {
+                                                debug!(
+                                                    "Text pasted successfully in {:?}",
+                                                    paste_time.elapsed()
+                                                );
+                                                // Leave a newer session's notice alone.
+                                                if owns_ui() {
+                                                    notices::clear(
+                                                        &ah_clone,
+                                                        NoticeSource::Dictation,
                                                     );
-                                                    // Leave a newer session's notice alone.
-                                                    if owns_ui() {
-                                                        notices::clear(
-                                                            &ah_clone,
-                                                            NoticeSource::Dictation,
-                                                        );
-                                                    }
-                                                    let notice = post_process_failed.then(|| {
+                                                }
+                                                let notice = if finished.needs_review {
+                                                    Some(Notice::new(
+                                                        NoticeCode::PasteFailed,
+                                                        NoticeSource::Dictation,
+                                                    ))
+                                                } else {
+                                                    post_process_failed.then(|| {
                                                         Notice::new(
                                                             NoticeCode::PostProcessFailed,
                                                             NoticeSource::Dictation,
                                                         )
-                                                    });
-                                                    (TranscriptionOutcome::Typed, notice)
-                                                }
-                                                Ok(utils::PasteOutcome::Blocked) => (
+                                                    })
+                                                };
+                                                (TranscriptionOutcome::Typed, notice)
+                                            }
+                                            Ok(utils::PasteOutcome::Blocked) => (
+                                                TranscriptionOutcome::Failed,
+                                                Some(Notice::new(
+                                                    NoticeCode::PasteBlockedElevated,
+                                                    NoticeSource::Dictation,
+                                                )),
+                                            ),
+                                            Err(e) => {
+                                                error!("Failed to paste transcription: {}", e);
+                                                (
                                                     TranscriptionOutcome::Failed,
                                                     Some(Notice::new(
-                                                        NoticeCode::PasteBlockedElevated,
+                                                        NoticeCode::PasteFailed,
                                                         NoticeSource::Dictation,
                                                     )),
-                                                ),
-                                                Err(e) => {
-                                                    error!("Failed to paste transcription: {}", e);
-                                                    (
-                                                        TranscriptionOutcome::Failed,
-                                                        Some(Notice::new(
-                                                            NoticeCode::PasteFailed,
-                                                            NoticeSource::Dictation,
-                                                        )),
-                                                    )
-                                                }
-                                            };
+                                                )
+                                            }
+                                        };
                                         match (owns_ui(), notice) {
                                             (true, Some(notice)) => {
                                                 notices::raise(&ah_clone, notice)
@@ -1164,7 +1206,7 @@ mod tests {
     }
 
     fn run_post_process(settings: &AppSettings, transcription: &str) -> PostProcessOutcome {
-        tauri::async_runtime::block_on(post_process_transcription(settings, transcription))
+        tauri::async_runtime::block_on(post_process_transcription(settings, transcription, ""))
     }
 
     #[test]

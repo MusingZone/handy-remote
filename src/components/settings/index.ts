@@ -6,6 +6,8 @@ export { HistorySettings } from "./history/HistorySettings";
 export { AboutSettings } from "./about/AboutSettings";
 export { PostProcessingSettings } from "./post-processing/PostProcessingSettings";
 export { ModelsSettings } from "./models/ModelsSettings";
+export { RemoteSettings } from "./remote/RemoteSettings";
+export { CloudAsrSettings } from "./cloud/CloudAsrSettings";
 
 // Individual setting components
 export { MicrophoneSelector } from "./MicrophoneSelector";

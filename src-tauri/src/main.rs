@@ -34,6 +34,14 @@ fn main() {
     if handy_app_lib::engine_supervisor::is_worker_invocation() {
         std::process::exit(handy_app_lib::engine_supervisor::run_worker());
     }
+    // Fork: stdin/stdout <-> TCP relay, the worker command for a server on this machine.
+    if let Some(address) = handy_app_lib::remote::relay_invocation() {
+        std::process::exit(handy_app_lib::remote::run_relay(&address));
+    }
+    // Fork: worker that sends each recording to a cloud speech-recognition API.
+    if handy_app_lib::cloud_asr::is_worker_invocation() {
+        std::process::exit(handy_app_lib::cloud_asr::run_worker());
+    }
 
     let cli_args = CliArgs::parse();
     handy_app_lib::run(cli_args)

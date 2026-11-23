@@ -10,7 +10,13 @@
     "secureInputWarning": "⚠ קיצורי המקשים חסומים על ידי Secure Input",
     "language": "שפה",
     "autoLanguage": "אוטומטי",
-    "otherLanguages": "שפות אחרות"
+    "otherLanguages": "שפות אחרות",
+    "voiceReview": "● סקירת הצעות ({count} ממתינות)",
+    "voiceAnalyzing": "מנתח את המשוב שלך…",
+    "voiceNoPending": "אין הצעות ממתינות",
+    "voiceTooltipPending": "{count} הצעות הכתבה ממתינות (לחץ על הסמל)",
+    "voiceReport": "דיווח על ההכתבה האחרונה…",
+    "voiceGuide": "מדריך משוב הכתבה"
   },
   "sidebar": {
     "general": "כללי",
@@ -19,7 +25,9 @@
     "postProcessing": "עיבוד משלים",
     "history": "היסטוריה",
     "debug": "ניפוי שגיאות",
-    "about": "אודות"
+    "about": "אודות",
+    "remote": "מרוחק",
+    "cloud": "Cloud"
   },
   "onboarding": {
     "customModelDescription": "לא נתמך באופן רשמי",
@@ -144,6 +152,7 @@
       },
       "model": "מודל",
       "showAll": "הצג את כל {{count}} המודלים",
+      "useServer": "יש לי שרת Handy Remote",
       "download": "הורד {{size}}",
       "downloadInstead": "הורד {{size}} במקום זאת",
       "pauses": "{{name}} נעצר ב-{{percent}}%",
@@ -666,6 +675,52 @@
           "placeholderWithOptions": "חפש או בחר מודל",
           "placeholderNoOptions": "הקלד שם מודל",
           "refreshModels": "רענן מודלים"
+        },
+        "endpoint": {
+          "import": "Import endpoints",
+          "imported": "Imported {{count}} endpoints",
+          "importFailed": "Could not import endpoints",
+          "auth": "Authentication",
+          "authDescription": "Send only the selected authentication header. Automatic uses Bearer for OpenAI and x-api-key for Anthropic.",
+          "authFailed": "Could not save authentication",
+          "authOptions": {
+            "auto": "Automatic",
+            "bearer": "Bearer token",
+            "api_key": "api-key header",
+            "none": "None"
+          }
+        }
+      },
+      "refine": {
+        "title": "Refine with a language model",
+        "always": {
+          "label": "Refine every dictation",
+          "description": "Send every dictation through the model and prompt above before it is pasted, not only the post-processing shortcut. Live pasting while you speak is turned off, and pasting waits for the model."
+        },
+        "detect": {
+          "label": "Local models",
+          "description": "Find language model servers running on this computer (Ollama, LM Studio, llama.cpp, Foundry Local, OpenVINO Model Server, Lemonade) and the Copilot bridge. Text stays on this computer, except through the Copilot bridge, which passes it to GitHub Copilot.",
+          "button": "Find local models",
+          "running": "Searching…",
+          "none": "No local model server answered. Start one (for example Ollama with a small instruct model such as qwen2.5:3b) and search again.",
+          "recommended": "recommended",
+          "use": "Use"
+        },
+        "benchmark": {
+          "label": "Speed test",
+          "description": "Run the selected provider, model and prompt on a sample dictation (one warm-up, then three timed runs) and show the result.",
+          "button": "Run speed test",
+          "running": "Testing…",
+          "result": "{{model}}: median {{ms}} ms ({{runs}} ms)"
+        },
+        "rules": {
+          "label": "My rules",
+          "description": "Your own instructions for the model, one per line, such as how to write floors, numbers or product names. They are added to the selected prompt for every dictation and take priority over its rules. Lines starting with # are comments. The file is read on every dictation, so you can also edit it in any editor or keep it in a synced folder. Your custom words are always kept exactly as written.",
+          "placeholder": "# One rule per line, for example:\nWrite floors as digits: 三楼 → 3楼\nAlways write \"Copilot\" with a capital C",
+          "save": "Save rules",
+          "saved": "Saved, {{count}} rules in use.",
+          "file": "Rules file",
+          "useFile": "Use this file"
         }
       },
       "prompts": {
@@ -898,6 +953,139 @@
           "details": "Handy משתמש ב-ggml לתמלול מהיר ומקומי. תודה לעבודה המדהימה של Georgi Gerganov וכל התורמים."
         }
       }
+    },
+    "remote": {
+      "intro": "הזיהוי רץ על שרת Handy Remote, למשל מחשב חזק יותר ברשת, דרך SSH. כשהאפשרות פעילה, המודלים המקומיים לא בשימוש.",
+      "guide": "מדריך התקנה",
+      "groups": {
+        "recognition": "זיהוי",
+        "connection": "חיבור",
+        "key": "מפתח גישה"
+      },
+      "enabled": {
+        "label": "שימוש בשרת מרוחק",
+        "description": "ההכתבה מזוהה בשרת שלמטה במקום במחשב זה."
+      },
+      "incremental_paste": {
+        "label": "הדבקה תוך כדי דיבור",
+        "description": "מדביק כל משפט שהסתיים כבר במהלך ההקלטה."
+      },
+      "rdp_caret": {
+        "label": "מעקב אחר הסמן בשולחן עבודה מרוחק",
+        "description": "כשחלון שולחן עבודה מרוחק בחזית, השכבה מוצגת מתחת לסמן של היישום שבתוכו. נדרש עוזר הסמן בשרת."
+      },
+      "rdp_dictation": {
+        "label": "הכתבה בתוך שולחן עבודה מרוחק",
+        "description": "כאשר חלון שולחן עבודה מרוחק בחזית, קיצור ההכתבה מפעיל את Handy בתוך ההפעלה המרוחקת, שמקליט את המיקרופון המנותב ומדביק שם. דורש את עוזר הסמן בשרת; אחרת ההכתבה מתבצעת כאן."
+      },
+      "pairing": {
+        "label": "קוד צימוד",
+        "description": "הדבק את הקוד ש-\"doctor.py pair\" מדפיס בשרת כדי למלא את השדות שלמטה.",
+        "apply": "החל",
+        "applied": "מולא מקוד הצימוד. בדוק ואז שמור.",
+        "invalid": "קוד צימוד לא תקין: {{error}}"
+      },
+      "host": {
+        "label": "שרת",
+        "description": "שם המארח או הכתובת של השרת. localhost אם השרת רץ במחשב זה."
+      },
+      "user": {
+        "label": "משתמש SSH",
+        "description": "החשבון לכניסה לשרת."
+      },
+      "ssh_port": {
+        "label": "פורט SSH",
+        "description": "פורט ה-SSH של השרת, בדרך כלל 22."
+      },
+      "server_port": {
+        "label": "פורט השרת",
+        "description": "הפורט שבו שרת הזיהוי מאזין, בשרת עצמו."
+      },
+      "caret_port": {
+        "label": "פורט עוזר הסמן",
+        "description": "הפורט של עוזר הסמן בשרת."
+      },
+      "identity_file": {
+        "label": "קובץ מפתח SSH",
+        "description": "מפתח פרטי לכניסה. ריק: המפתח של יישום זה אם קיים, אחרת ברירות המחדל של SSH."
+      },
+      "ssh_path": {
+        "label": "תוכנת ssh",
+        "description": "הנתיב ל-ssh. ריק: איתור אוטומטי.",
+        "missing": "ssh לא נמצא"
+      },
+      "host_key": {
+        "label": "מפתח השרת",
+        "description": "מפתח המארח SSH של השרת מקוד הצימוד. כשהוא מוגדר, שרת עם מפתח אחר נדחה.",
+        "none": "לא מקובע",
+        "clear": "נקה"
+      },
+      "client_key": {
+        "label": "המפתח של מחשב זה",
+        "description": "אשר את המפתח פעם אחת: הרץ את הפקודה שלמטה בתיקיית השרת.",
+        "none": "אין מפתח עדיין.",
+        "create": "צור מפתח",
+        "copy": "העתק פקודה",
+        "copied": "הועתק"
+      },
+      "test": {
+        "button": "בדיקת חיבור",
+        "running": "בודק…",
+        "connected": "התחבר תוך {{connect}} מ\"ש; השרת ענה תוך {{roundTrip}} מ\"ש.",
+        "oldServer": "השרת בגרסה ישנה ואינו מספק פרטים.",
+        "loaded": "המודלים טעונים.",
+        "sleeping": "המודלים פורקו; הם ייטענו בהכתבה הראשונה (כמה שניות).",
+        "failed": "החיבור נכשל: {{error}}"
+      },
+      "save": "שמור",
+      "revert": "בטל שינויים",
+      "saved": "נשמר.",
+      "automatic": "אוטומטי"
+    },
+    "cloudAsr": {
+      "intro": "Recognize speech with a public cloud speech-to-text service of your choice (OpenAI, Azure, Google, Deepgram, AssemblyAI, ElevenLabs, Groq, Mistral, Alibaba Qwen3-ASR, SiliconFlow, or any OpenAI-compatible server). Each recording is uploaded once when it ends; there is no live preview.",
+      "privacy": "Your audio leaves this computer and is processed under the provider's terms. API keys are stored only in this computer's settings.",
+      "saved": "Saved.",
+      "save": "Save",
+      "revert": "Revert",
+      "groups": {
+        "recognition": "Recognition",
+        "service": "Service"
+      },
+      "enabled": {
+        "label": "Use cloud recognition",
+        "description": "Send dictation to the service below instead of recognizing on this computer or a remote server."
+      },
+      "provider": {
+        "label": "Provider",
+        "description": "Endpoint, model and key are remembered per provider."
+      },
+      "base_url": {
+        "label": "Endpoint",
+        "description": "Leave empty for the default. Change it for another region, a proxy, or a compatible server."
+      },
+      "model": {
+        "label": "Model",
+        "description": "Leave empty for the default model."
+      },
+      "api_key": {
+        "label": "API key",
+        "description": "Required by this provider.",
+        "optional": "Optional: only if your server asks for one.",
+        "placeholder": "Paste the key",
+        "saved": "Saved (type to replace)",
+        "get": "Get a key"
+      },
+      "timeout": {
+        "label": "Timeout (s)",
+        "description": "Longest wait for one recognition, upload included."
+      },
+      "test": {
+        "button": "Test",
+        "running": "Sending a one-second test sound…",
+        "failed": "Test failed: {{error}}",
+        "ok": "Works: answered in {{ms}} ms (recognized: {{text}})."
+      }
     }
   },
   "footer": {
@@ -982,7 +1170,11 @@
   "overlay": {
     "transcribing": "מתמלל...",
     "processing": "מעבד...",
-    "loadingModel": "טוען מודל..."
+    "loadingModel": "טוען מודל...",
+    "remoteWaking": "מעיר את המודלים בשרת…",
+    "speakNow": "דבר עכשיו",
+    "refineOn": "ההכתבה הזו תלוטש · לחצו כדי לדלג",
+    "refineOff": "ההכתבה הזו לא תלוטש · לחצו כדי ללטש"
   },
   "secureInput": {
     "blockedWithCulprit_one": "ייתכן ש-{{name}} חוסם קיצור דרך אחד",

@@ -37,6 +37,8 @@ const WAVE_BARS = 9;
 // the user is speaking; cold loads can take 40s+.
 const SLOW_MODEL_LOAD_MS = 2000;
 
+const REMOTE_WAKING = "{{handy-remote:waking}}";
+
 // Matches the delay in `hide_recording_overlay`, so a notice can fade out.
 const OVERLAY_FADE_MS = 300;
 
@@ -51,6 +53,9 @@ const RecordingOverlay: React.FC = () => {
   // Stay visually in an arming state until the backend processes the first
   // actual microphone sample chunk.
   const [captureReady, setCaptureReady] = useState(false);
+  // Fork: whether this take goes through the LLM, and the user's per-take switch.
+  const [refines, setRefines] = useState(false);
+  const [refineOff, setRefineOff] = useState(false);
   // Recording starts while the model loads in the background. Say so, otherwise
   // a cold start looks like an empty Live preview that ignores speech, then a
   // hung "Transcribing..." spinner. Once recording stops, any in-flight load is
@@ -90,6 +95,8 @@ const RecordingOverlay: React.FC = () => {
   // until they scroll back down.
   const capRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
+  // Fork: set once native code reports the anchor edge; then settings no longer decide the layout.
+  const anchoredRef = useRef(false);
   const direction = getLanguageDirection(i18n.language);
 
   useEffect(() => {
@@ -97,6 +104,12 @@ const RecordingOverlay: React.FC = () => {
       const unlistenNotice = await listen<Notice>("overlay-notice", (event) => {
         clearTimeout(fadeTimerRef.current);
         setNotice(event.payload);
+      });
+
+      // Fork: native placement (caret-following on Windows) says which edge the card hangs from.
+      const unlistenAnchor = await listen<string>("overlay-anchor", (event) => {
+        setPosition(event.payload === "top" ? "top" : "bottom");
+        anchoredRef.current = true;
       });
 
       const unlistenShow = await listen("show-overlay", async (event) => {
@@ -118,7 +131,7 @@ const RecordingOverlay: React.FC = () => {
         // bottom one; read the placement so the layout can flip to match.
         try {
           const settings = await commands.getAppSettings();
-          if (settings.status === "ok") {
+          if (settings.status === "ok" && !anchoredRef.current) {
             setPosition(
               settings.data.overlay_position === "top" ? "top" : "bottom",
             );
@@ -154,7 +167,20 @@ const RecordingOverlay: React.FC = () => {
         setCaptureReady(true);
       });
 
+      // Sent at the start of every take, before or after show-overlay.
+      const unlistenRefine = await listen<boolean>(
+        "overlay-refine",
+        (event) => {
+          setRefines(event.payload);
+          setRefineOff(false);
+        },
+      );
+
       const unlistenLevel = await listen<number[]>("mic-level", (event) => {
+        // Levels only flow once the microphone delivers samples, so they also
+        // repair a lost or reordered recording-ready event (seen once on a
+        // Remote Desktop session: the card stayed dimmed while recording).
+        setCaptureReady(true);
         const newLevels = event.payload as number[];
         // Exponential smoothing across the 16 buckets, then take the first N
         // bars for the shared waveform.
@@ -167,7 +193,13 @@ const RecordingOverlay: React.FC = () => {
       });
 
       const unlistenStream = await events.streamTextEvent.listen((event) => {
-        setStreamText(event.payload);
+        // Fork: a Handy Remote server sends status tokens in place of the preview.
+        const status = (s: string) =>
+          s.split(REMOTE_WAKING).join(i18n.t("overlay.remoteWaking"));
+        setStreamText({
+          committed: status(event.payload.committed),
+          tentative: status(event.payload.tentative),
+        });
       });
 
       const unlistenPhase = await events.streamPhaseEvent.listen((event) => {
@@ -205,9 +237,11 @@ const RecordingOverlay: React.FC = () => {
 
       return () => {
         unlistenNotice();
+        unlistenAnchor();
         unlistenShow();
         unlistenHide();
         unlistenReady();
+        unlistenRefine();
         unlistenLevel();
         unlistenStream();
         unlistenPhase();
@@ -310,16 +344,85 @@ const RecordingOverlay: React.FC = () => {
     </button>
   );
 
+  // Fork: per-take refine switch. While recording it toggles; once the take is
+  // being processed it can only turn refining off (the reply is then abandoned).
+  const refineBtn = (working: boolean) => {
+    if (!refines) return null;
+    const locked = working && refineOff;
+    return (
+      <button
+        className={`srefine ${refineOff ? "off" : "on"}`}
+        aria-label={t(refineOff ? "overlay.refineOff" : "overlay.refineOn")}
+        aria-pressed={!refineOff}
+        title={t(refineOff ? "overlay.refineOff" : "overlay.refineOn")}
+        disabled={locked}
+        onClick={(e) => {
+          e.stopPropagation();
+          const next = working ? true : !refineOff;
+          setRefineOff(next);
+          commands.setRefineSkipped(next);
+        }}
+      >
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path
+            className="star"
+            d="M7 1.8 C7.4 5 8.2 5.9 11.6 6.4 C8.2 6.9 7.4 7.8 7 11 C6.6 7.8 5.8 6.9 2.4 6.4 C5.8 5.9 6.6 5 7 1.8 Z"
+            fill="currentColor"
+          />
+          <path
+            className="star small"
+            d="M12.2 9.6 C12.4 11 12.8 11.4 14.2 11.6 C12.8 11.8 12.4 12.2 12.2 13.6 C12 12.2 11.6 11.8 10.2 11.6 C11.6 11.4 12 11 12.2 9.6 Z"
+            fill="currentColor"
+          />
+          <path
+            className="slash"
+            d="M2.5 13.5 L13.5 2.5"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            fill="none"
+          />
+        </svg>
+      </button>
+    );
+  };
+
   // dot (left) | waveform (center) | timer + cancel (right) — same structure for
   // pill & panel, so the Live morph is a pure width change.
   const listeningRow = (showTimer: boolean, showCancel: boolean) => (
     <div className="sbase">
       <div className="sbase-l">
         <span className={`sdot ${captureReady ? "ready" : "arming"}`} />
+        {captureReady && (
+          <span
+            className="scue"
+            role="status"
+            aria-label={t("overlay.speakNow")}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <rect
+                x="5.5"
+                y="1.5"
+                width="5"
+                height="8.5"
+                rx="2.5"
+                fill="currentColor"
+              />
+              <path
+                d="M3.5 7.5a4.5 4.5 0 0 0 9 0M8 12v2.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+              />
+            </svg>
+          </span>
+        )}
       </div>
       {waveform}
       <div className="sbase-r">
         {showTimer && <span className="stimer">{fmtTime(elapsed)}</span>}
+        {refineBtn(false)}
         {showCancel && cancelBtn}
       </div>
     </div>
@@ -333,7 +436,10 @@ const RecordingOverlay: React.FC = () => {
         <span className="sspinner" />
       </div>
       <span className="swork-label">{label}</span>
-      <div className="sbase-r">{showCancel && cancelBtn}</div>
+      <div className="sbase-r">
+        {refineBtn(true)}
+        {showCancel && cancelBtn}
+      </div>
     </div>
   );
 
@@ -375,15 +481,18 @@ const RecordingOverlay: React.FC = () => {
       ? hasText || !!noticeText
       : hasText || loadingNotice || (loadNoticeShown && !working);
     const collapsed = working && !hasText;
+    // mic warm-up cue: dim until the first mic samples arrive, then glow once.
+    const readyCls =
+      working || liveNotice ? "" : captureReady ? "lit" : "arming";
 
     return (
       <div dir={direction} className={`ov-stage ${position}`}>
         {noticeProbe}
         <div
           key={session}
-          className={`scard ${open ? "open" : ""} ${collapsed ? "working" : ""} ${
+          className={`scard ${open ? "open" : ""} ${collapsed ? "working" : ""} ${readyCls} ${
             isVisible ? "" : "leaving"
-          } ${noticeClass}`}
+          } ${refines && !liveNotice ? "has-refine" : ""} ${noticeClass}`}
           style={liveNotice && !open ? { width: noticeWidth } : undefined}
           onClick={dismissNotice}
         >
@@ -443,7 +552,9 @@ const RecordingOverlay: React.FC = () => {
     >
       {noticeProbe}
       <div
-        className={`scard compact ${working && isVisible ? "cworking" : ""} ${noticeClass}`}
+        className={`scard compact ${working && isVisible ? "cworking" : ""} ${
+          working || shownNotice ? "" : captureReady ? "lit" : "arming"
+        } ${refines && !shownNotice ? "has-refine" : ""} ${noticeClass}`}
         style={shownNotice ? { width: noticeWidth } : undefined}
         onClick={dismissNotice}
       >

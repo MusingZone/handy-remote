@@ -4,13 +4,17 @@ mod apple_intelligence;
 mod audio_feedback;
 pub mod audio_toolkit;
 mod autostart;
+#[cfg(target_os = "windows")]
+mod caret;
 mod catalog;
 mod chinese_script;
 pub mod cli;
 mod clipboard;
+pub mod cloud_asr;
 mod commands;
 pub mod engine_supervisor;
 mod helpers;
+mod incremental_paste;
 mod input;
 mod language_detection;
 mod languages;
@@ -23,6 +27,8 @@ mod paste_tx;
 pub mod portable;
 #[cfg(target_os = "linux")]
 mod primary_selection;
+pub mod refine;
+pub mod remote;
 mod secure_input;
 mod settings;
 mod shortcut;
@@ -33,6 +39,7 @@ mod transcription_hook;
 mod tray;
 mod tray_i18n;
 mod utils;
+mod voice_feedback;
 pub mod webkit_renderer;
 
 pub use cli::CliArgs;
@@ -283,7 +290,12 @@ fn initialize_core_logic(app_handle: &AppHandle) {
                     }
                 );
                 if opens_window {
-                    show_main_window(tray.app_handle());
+                    // Fork: with voice-feedback suggestions waiting, a click opens the review instead.
+                    if voice_feedback::current().pending > 0 {
+                        voice_feedback::run("review");
+                    } else {
+                        show_main_window(tray.app_handle());
+                    }
                 }
             });
     }
@@ -304,6 +316,9 @@ fn initialize_core_logic(app_handle: &AppHandle) {
             "notice" => {
                 show_main_window(app);
             }
+            "voice_review" => voice_feedback::run("review"),
+            "voice_report" => voice_feedback::run("report"),
+            "voice_guide" => voice_feedback::run("guide"),
             "check_updates" => {
                 let settings = settings::get_settings(app);
                 if settings::update_checks_effectively_enabled(&settings) {
@@ -401,6 +416,11 @@ fn initialize_core_logic(app_handle: &AppHandle) {
 
     // Create the recording overlay window (hidden by default)
     utils::create_recording_overlay(app_handle);
+
+    // Fork: voice-feedback state in the tray, and a warm tunnel to the RDP caret helper.
+    voice_feedback::start_watch(app_handle);
+    #[cfg(target_os = "windows")]
+    caret::start_remote_prewarm();
 }
 
 #[tauri::command]
@@ -681,6 +701,8 @@ pub fn run(cli_args: CliArgs) {
 
     // Detect portable mode before anything else
     portable::init();
+    // Fork: the first run of Handy Remote copies an upstream Handy install's data.
+    remote::migrate_legacy_data();
 
     // Parse console logging directives from RUST_LOG, falling back to info-level logging
     // when the variable is unset
@@ -688,6 +710,20 @@ pub fn run(cli_args: CliArgs) {
 
     let specta_builder = Builder::<tauri::Wry>::new()
         .commands(collect_commands![
+            remote::change_remote_settings,
+            remote::remote_apply_pairing,
+            remote::remote_test_connection,
+            remote::remote_client_key,
+            remote::remote_detect_ssh,
+            cloud_asr::cloud_asr_providers,
+            cloud_asr::change_cloud_asr_settings,
+            cloud_asr::cloud_asr_test,
+            refine::refine_detect_local_llms,
+            refine::refine_rules_get,
+            refine::refine_rules_set,
+            refine::change_refine_rules_file_setting,
+            refine::refine_benchmark,
+            refine::change_post_process_always_setting,
             shortcut::change_binding,
             shortcut::reset_binding,
             shortcut::change_shortcut_activation_setting,
@@ -722,6 +758,8 @@ pub fn run(cli_args: CliArgs) {
             shortcut::change_experimental_enabled_setting,
             shortcut::change_post_process_base_url_setting,
             shortcut::change_post_process_api_format_setting,
+            refine::change_post_process_auth_setting,
+            refine::import_post_process_endpoints,
             shortcut::change_post_process_api_key_setting,
             shortcut::change_post_process_model_setting,
             shortcut::set_post_process_provider,
@@ -758,6 +796,7 @@ pub fn run(cli_args: CliArgs) {
             trigger_update_check,
             show_main_window_command,
             commands::cancel_operation,
+            commands::set_refine_skipped,
             commands::is_portable,
             commands::is_update_checks_locked,
             commands::get_app_dir_path,
@@ -918,6 +957,8 @@ pub fn run(cli_args: CliArgs) {
                 signal_handle::send_transcription_input(app, "transcribe_with_post_process", "CLI");
             } else if args.iter().any(|a| a == "--cancel") {
                 crate::utils::cancel_current_operation(app);
+            } else if let Some(action) = voice_feedback::action_from_args(&args) {
+                std::thread::spawn(move || voice_feedback::open(&action));
             } else {
                 // A second process was launched without remote-control flags
                 // (e.g. the binary run from a shell). On macOS, relaunching the
@@ -973,6 +1014,8 @@ pub fn run(cli_args: CliArgs) {
             system_languages::log_system_languages();
 
             specta_builder.mount_events(app);
+            cloud_asr::init(app.handle());
+            remote::init(app.handle());
 
             // Headless one-shot path (`--transcribe-file` / `--list-devices` /
             // `--list-models`): initialize only what transcription needs — the
@@ -1018,7 +1061,7 @@ pub fn run(cli_args: CliArgs) {
             // for portable mode (redirects WebView2 cache to portable Data dir)
             let mut win_builder =
                 tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("/".into()))
-                    .title("Handy")
+                    .title("Handy Remote")
                     .inner_size(utils::MAIN_WINDOW_SIZE.0, utils::MAIN_WINDOW_SIZE.1)
                     .min_inner_size(utils::MAIN_WINDOW_SIZE.0, utils::MAIN_WINDOW_SIZE.1)
                     .resizable(true)

@@ -21,6 +21,11 @@ import { ModelSelect } from "../PostProcessingSettingsApi/ModelSelect";
 import { usePostProcessProviderState } from "../PostProcessingSettingsApi/usePostProcessProviderState";
 import { ShortcutInput } from "../ShortcutInput";
 import { useSettings } from "../../../hooks/useSettings";
+import { RefineSettings } from "./RefineSettings";
+import {
+  EndpointAuth,
+  ImportEndpointsButton,
+} from "../PostProcessingSettingsApi/EndpointConfig";
 
 const PostProcessingSettingsApiComponent: React.FC = () => {
   const { t } = useTranslation();
@@ -41,6 +46,7 @@ const PostProcessingSettingsApiComponent: React.FC = () => {
             value={state.selectedProviderId}
             onChange={state.handleProviderSelect}
           />
+          <ImportEndpointsButton />
         </div>
       </SettingContainer>
 
@@ -52,6 +58,9 @@ const PostProcessingSettingsApiComponent: React.FC = () => {
         ) : null
       ) : (
         <>
+          {state.isCustomProvider && state.selectedProvider && (
+            <EndpointAuth provider={state.selectedProvider} />
+          )}
           {state.isCustomProvider && (
             <SettingContainer
               title={t("settings.postProcessing.api.apiFormat.title")}
@@ -86,7 +95,7 @@ const PostProcessingSettingsApiComponent: React.FC = () => {
             </SettingContainer>
           )}
 
-          {state.selectedProvider?.id === "custom" && (
+          {state.selectedProvider?.allow_base_url_edit && (
             <SettingContainer
               title={t("settings.postProcessing.api.baseUrl.title")}
               description={t("settings.postProcessing.api.baseUrl.description")}
@@ -477,6 +486,10 @@ export const PostProcessingSettings: React.FC = () => {
 
       <SettingsGroup title={t("settings.postProcessing.api.title")}>
         <PostProcessingSettingsApi />
+      </SettingsGroup>
+
+      <SettingsGroup title={t("settings.postProcessing.refine.title")}>
+        <RefineSettings />
       </SettingsGroup>
 
       <SettingsGroup title={t("settings.postProcessing.prompts.title")}>

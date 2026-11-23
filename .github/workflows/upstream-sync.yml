@@ -1,0 +1,160 @@
+name: "upstream sync"
+# On request: merge a newer upstream release on sync/<tag> and check the pull request.
+# Never merge the pull request or publish a release automatically.
+# A merge conflict opens (or updates) an issue labelled upstream-conflict instead.
+#
+# Secret SYNC_TOKEN (optional, recommended): a fine-grained token for this repository only with
+# Contents, Pull requests and Workflows read/write. GITHUB_TOKEN cannot push or merge changes to
+# .github/workflows/, which upstream releases often contain.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Upstream tag to merge (default: latest upstream release)"
+        type: string
+        default: ""
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+env:
+  UPSTREAM: cjpais/Handy
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.find.outputs.tag }}
+      branch: ${{ steps.find.outputs.branch }}
+      pr: ${{ steps.pr.outputs.number }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Find a newer upstream release
+        id: find
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ inputs.tag }}
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          set -euo pipefail
+          current=$(tr -d '[:space:]' < .upstream-version)
+          tag=${INPUT_TAG:-$(gh release view --repo "$UPSTREAM" --json tagName -q .tagName)}
+          echo "upstream $tag, merged $current"
+          newest=$(printf '%s\n%s\n' "${current#v}" "${tag#v}" | sort -V | tail -n1)
+          if [ "${tag#v}" = "${current#v}" ] || [ "$newest" != "${tag#v}" ]; then
+            echo "nothing to merge"; exit 0
+          fi
+          branch="sync/$tag"
+          if [ "$MANUAL" != "true" ]; then
+            if git ls-remote --exit-code origin "refs/heads/$branch" >/dev/null; then
+              echo "$branch already exists; waiting for it to be resolved"; exit 0
+            fi
+            if [ -n "$(gh issue list --state open --label upstream-conflict --search "$tag in:title" --json number -q '.[].number')" ]; then
+              echo "conflict issue for $tag is open; waiting for it to be resolved"; exit 0
+            fi
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Merge the upstream release
+        id: git
+        if: steps.find.outputs.tag
+        env:
+          TAG: ${{ steps.find.outputs.tag }}
+          BRANCH: ${{ steps.find.outputs.branch }}
+        run: |
+          set -uo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --no-tags "https://github.com/$UPSTREAM.git" "refs/tags/$TAG:refs/tags/$TAG"
+          git checkout -B "$BRANCH"
+          if git merge --no-ff --no-edit -m "upstream: merge $TAG" "$TAG" > "$RUNNER_TEMP/merge.log" 2>&1; then
+            echo "$TAG" > .upstream-version
+            git commit -am "upstream: track $TAG"
+            echo "conflict=false" >> "$GITHUB_OUTPUT"
+          else
+            cat "$RUNNER_TEMP/merge.log"
+            git diff --name-only --diff-filter=U > "$RUNNER_TEMP/conflicts.txt"
+            git merge --abort
+            echo "conflict=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report a merge conflict
+        if: steps.git.outputs.conflict == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.find.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh label create upstream-conflict --color B60205 --description "Upstream release needs a manual merge" 2>/dev/null || true
+          {
+            echo "Upstream [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG) does not merge cleanly into \`main\`."
+            echo
+            echo "Conflicted files:"
+            echo
+            while read -r file; do echo "- \`$file\`"; done < "$RUNNER_TEMP/conflicts.txt"
+            echo
+            echo "<details><summary>git merge output</summary>"
+            echo
+            echo "~~~"
+            tail -n 100 "$RUNNER_TEMP/merge.log"
+            echo "~~~"
+            echo "</details>"
+            echo
+            echo "Resolve on branch \`sync/$TAG\` (merge \`$TAG\`, set \`.upstream-version\`), open a pull request,"
+            echo "and run **remote release** after it is merged. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } > "$RUNNER_TEMP/issue.md"
+          title="Upstream $TAG needs a manual merge"
+          existing=$(gh issue list --state open --label upstream-conflict --search "$TAG in:title" --json number -q '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file "$RUNNER_TEMP/issue.md"
+          else
+            gh issue create --title "$title" --label upstream-conflict --body-file "$RUNNER_TEMP/issue.md"
+          fi
+
+      - name: Push the sync branch
+        if: steps.git.outputs.conflict == 'false'
+        env:
+          BRANCH: ${{ steps.find.outputs.branch }}
+        run: |
+          if ! git push --force origin "$BRANCH"; then
+            echo "::error::push refused. If upstream changed .github/workflows, set the SYNC_TOKEN secret (see the header of upstream-sync.yml)."
+            exit 1
+          fi
+
+      - name: Open the pull request
+        id: pr
+        if: steps.git.outputs.conflict == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.find.outputs.tag }}
+          BRANCH: ${{ steps.find.outputs.branch }}
+        run: |
+          set -euo pipefail
+          number=$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number')
+          if [ -z "$number" ]; then
+            body="Merges upstream [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG). Checks: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. Maintainer review, trial installation and explicit approval are required before merging or releasing."
+            gh pr create --base main --head "$BRANCH" --title "Merge upstream $TAG" --body "$body"
+            number=$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number')
+          fi
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+  checks:
+    needs: merge
+    if: needs.merge.outputs.pr
+    uses: ./.github/workflows/remote-ci.yml
+    with:
+      ref: ${{ needs.merge.outputs.branch }}
+    secrets:
+      SCRUB_PATTERNS: ${{ secrets.SCRUB_PATTERNS }}

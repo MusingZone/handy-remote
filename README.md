@@ -1,3 +1,89 @@
+# Handy Remote
+
+English | [简体中文](README.zh-CN.md)
+
+[![Release](https://img.shields.io/github/v/release/MusingZone/handy-remote?include_prereleases&label=release)](https://github.com/MusingZone/handy-remote/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
+
+**Handy, with the speech recognition running on another PC or in the cloud.** Dictate on a thin
+laptop (or into Remote Desktop); a stronger PC on your network recognises the audio over SSH, or a
+cloud speech service of your choice does, and the text lands at your caret.
+
+<p align="center">
+  <img src="docs/assets/dictation.gif" width="820" alt="Live preview in the overlay at the caret while speaking, then sentences pasted one by one">
+</p>
+
+Handy Remote is a fork of [Handy](https://github.com/cjpais/Handy) by CJ Pais (MIT). It keeps
+everything Handy does; on a single PC it works like Handy. The remote features are developed and
+tested on Windows.
+
+## What it adds
+
+| Feature                                                   | What you get                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Remote recognition over SSH**                           | Audio is relayed with `ssh -W`; the [server](server) listens on loopback only (key-only access, pinned host key). OpenVINO Qwen3-ASR 1.7B runs on the configured CPU or supported accelerator; an optional 0.6B NPU model provides live previews and speculative decoding.                                                                                                                                              |
+| **Live dictation**                                        | Live preview of the sentence you are speaking, sentence-by-sentence paste while you keep talking, an overlay that follows the text caret (also [inside Remote Desktop](docs/remote/RDP.md)), and a ready cue once the microphone really delivers audio.                                                                                                                                                                 |
+| **Remote settings page**                                  | Paste a pairing code, test the connection, create a key.                                                                                                                                                                                                                                                                                                                                                                |
+| **[Cloud speech recognition](#cloud-speech-recognition)** | No second PC needed: OpenAI, Azure, Google, Deepgram, AssemblyAI, ElevenLabs, Groq, Mistral, Alibaba Qwen3-ASR, SiliconFlow or any OpenAI-compatible server.                                                                                                                                                                                                                                                            |
+| **[LLM refinement before paste](#refine-before-paste)**   | A "Polish & structure" prompt that also turns spoken enumerations into numbered lists; local model servers detected automatically (Ollama, LM Studio, llama.cpp, Foundry Local, OVMS, Lemonade), plus a [Copilot bridge](tools/copilot-bridge/README.md) that uses your GitHub Copilot subscription; a speed test; and **My rules**, a plain-text rules file read on every dictation. Custom words are kept as written. |
+| **Feedback loop**                                         | Report a wrong dictation and review suggested fixes from the tray ([docs](docs/remote/FEEDBACK.md)).                                                                                                                                                                                                                                                                                                                    |
+| **Own identity and updater**                              | Installs next to upstream Handy, copies (never moves) its settings, updates from this repository's signed releases.                                                                                                                                                                                                                                                                                                     |
+
+### Cloud speech recognition
+
+No second PC? Turn on cloud recognition, pick a provider, paste your API key and press **Test**. Each
+recording is uploaded once when it ends, and keys stay in this computer's settings
+([docs](docs/remote/CLOUD-AND-LLM.md)).
+
+<p align="center">
+  <img src="docs/assets/cloud.gif" width="820" alt="Cloud settings: enabling cloud recognition, choosing Deepgram from the provider list, entering a model and key, and a successful test">
+</p>
+
+### Refine before paste
+
+Say the list out loud; the language model writes it down as a list and follows your own rules.
+
+<p align="center">
+  <img src="docs/assets/refine.gif" width="820" alt="Raw spoken Chinese transcript turned into a numbered list before paste">
+</p>
+
+<p align="center">
+  <img src="docs/assets/refine-settings.gif" width="820" alt="Post Process settings: finding the Copilot bridge and a local Ollama model, running a speed test and saving My rules">
+</p>
+
+<sub>The animations are rendered from the app's real React UI with mocked data; the dictation scenes
+are simulated with the app's real overlay. Regenerate them with
+[tools/readme-gifs](tools/readme-gifs/README.md).</sub>
+
+## Quick start
+
+1. **Server** (the stronger PC): [docs/remote/SERVER-SETUP.md](docs/remote/SERVER-SETUP.md).
+   Using the cloud instead? Skip this step.
+2. **Client** (the PC you dictate on): install from
+   [Releases](https://github.com/MusingZone/handy-remote/releases), then follow
+   [docs/remote/CLIENT-SETUP.md](docs/remote/CLIENT-SETUP.md) (or Settings → Cloud for
+   [cloud recognition](docs/remote/CLOUD-AND-LLM.md))
+3. **Everything else:** [docs/remote/README.md](docs/remote/README.md)
+
+> [!NOTE]
+> The installers are **not code-signed**. If Windows SmartScreen warns, choose **More info → Run
+> anyway**. Updates are verified with the project's own update signature.
+
+## More
+
+- What changed compared with upstream: [CHANGES-FROM-UPSTREAM.md](CHANGES-FROM-UPSTREAM.md)
+- Licences: [LICENSE](LICENSE) (MIT), [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)
+- Security: [SECURITY.md](SECURITY.md)
+- Credit: built on [Handy](https://github.com/cjpais/Handy) by CJ Pais and its contributors.
+
+---
+
+<a id="upstream-handy-readme"></a>
+
+<details>
+<summary><b>Upstream Handy README</b> (everything Handy itself does, which Handy Remote keeps)</summary>
+
 # Handy
 
 [![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com/invite/WVBeWsNXK4)
@@ -528,3 +614,5 @@ Handy is open-source software, but the Handy name, logo, icon, and brand assets 
 - **Silero** for great lightweight VAD
 - **Tauri** team for the excellent Rust-based app framework
 - **Community contributors** helping make Handy better
+
+</details>

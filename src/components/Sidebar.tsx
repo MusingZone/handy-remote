@@ -1,6 +1,15 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Cog, FlaskConical, History, Info, Sparkles, Cpu } from "lucide-react";
+import {
+  Cog,
+  FlaskConical,
+  History,
+  Info,
+  Sparkles,
+  Cpu,
+  Server,
+  Cloud,
+} from "lucide-react";
 import HandyTextLogo from "./icons/HandyTextLogo";
 import HandyHand from "./icons/HandyHand";
 import { useSettings } from "../hooks/useSettings";
@@ -11,6 +20,8 @@ import {
   AboutSettings,
   PostProcessingSettings,
   ModelsSettings,
+  RemoteSettings,
+  CloudAsrSettings,
 } from "./settings";
 
 export type SidebarSection = keyof typeof SECTIONS_CONFIG;
@@ -48,6 +59,18 @@ export const SECTIONS_CONFIG = {
     labelKey: "sidebar.models",
     icon: Cpu,
     component: ModelsSettings,
+    enabled: () => true,
+  },
+  remote: {
+    labelKey: "sidebar.remote",
+    icon: Server,
+    component: RemoteSettings,
+    enabled: () => true,
+  },
+  cloud: {
+    labelKey: "sidebar.cloud",
+    icon: Cloud,
+    component: CloudAsrSettings,
     enabled: () => true,
   },
   advanced: {

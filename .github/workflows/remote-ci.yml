@@ -1,0 +1,114 @@
+name: "remote ci"
+# Checks for the Handy Remote fork: upstream's lint and Rust tests, the recognition server and
+# feedback tool tests (no models needed), Markdown links, and a scrub for private details.
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Branch, tag or commit to check"
+        type: string
+        default: ""
+    secrets:
+      SCRUB_PATTERNS:
+        required: false
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.ref || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  repo-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Markdown links
+        run: python tools/ci/check_links.py
+      - name: Scrub check
+        env:
+          # Private names, hosts and proxies, one regular expression per line. Absent on pull
+          # requests from other forks; the generic patterns still run.
+          SCRUB_PATTERNS: ${{ secrets.SCRUB_PATTERNS }}
+        run: |
+          python tools/ci/scrub_check.py
+          python tools/ci/scrub_check.py --history --base "$(cat .upstream-version)"
+      - name: Audit tooling tests
+        run: python -m unittest discover -s tools/ci/tests -v
+
+  python-tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: server/requirements.txt
+      - name: Install server dependencies
+        run: python -m pip install -r server/requirements.txt
+      - name: Server tests
+        working-directory: server
+        run: python -m unittest discover -s tests -v
+      - name: Feedback tool tests
+        working-directory: tools/feedback
+        run: python -m unittest discover -s tests -v
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Translation consistency
+        run: bun run check:translations
+      - name: Model language coverage
+        run: bun run check:model-languages
+      - name: Bundled model catalog
+        run: bun run check:catalog
+      - name: Keyboard utilities
+        run: bun run test:keyboard
+      - name: ESLint
+        run: bun run lint
+      - name: Prettier
+        run: bun run format:check
+      - name: TypeScript and production frontend
+        run: bun run build
+      - name: Copilot bridge tests (mock runtime)
+        run: bun test tools/copilot-bridge/bridge.test.mjs
+
+  rust-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libasound2-dev libssl-dev libgtk-layer-shell-dev \
+            libvulkan-dev glslc spirv-headers
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+      - name: Rust tests
+        working-directory: src-tauri
+        run: cargo test

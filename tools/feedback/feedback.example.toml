@@ -1,0 +1,48 @@
+# Dictation feedback settings for Handy Remote.
+# Copy to %APPDATA%\handy-remote\feedback.toml and edit. Every key is optional; a missing file means
+# the defaults shown here. Needs Python 3.11+ (tomllib) or the tomli package on Python 3.10.
+# Never put API keys in this file: see [analyzer.openai] below.
+
+# Where reports, the change log, the backlog and local lexicon backups go.
+# Default: %LOCALAPPDATA%\handy-remote\feedback
+reports_dir = ""
+
+# UI and analysis language: "auto" (Windows display language), "en" or "zh-CN".
+language = "auto"
+
+# Handy's app-data folder (history.db, recordings\, settings_store.json).
+# Default: %APPDATA%\com.musingzone.handy-remote, else %APPDATA%\com.pais.handy.
+handy_dir = ""
+
+[connection]
+# By default the tool uses the client's own %APPDATA%\com.musingzone.handy-remote\remote_connection.json.
+# Any key set here overrides the value from that file.
+# settings_file = 'D:\other\remote_connection.json'
+# ssh = 'C:\Windows\System32\OpenSSH\ssh.exe'   # empty or missing ssh/target = direct TCP
+# ssh_args = ["-p", "22", "-i", '%USERPROFILE%\.ssh\id_ed25519', "-o", "BatchMode=yes"]
+# target = "user@speech-server"
+# server_port = 47821
+# host = "127.0.0.1"   # TCP host, or the host given to ssh -W (as seen from the SSH server)
+# timeout_s = 60
+
+[analyzer]
+# "copilot": GitHub Copilot CLI, run headless with read-only tools.
+# "openai":  any OpenAI-compatible /chat/completions endpoint (OpenAI, Azure OpenAI proxy, Ollama, vLLM ...).
+# "off":     only save reports; no analysis, nothing to review.
+backend = "copilot"
+timeout_s = 600
+
+[analyzer.copilot]
+path = ""          # empty = find `copilot` on PATH
+model = ""         # optional --model value
+extra_args = []    # extra command-line arguments
+
+[analyzer.openai]
+base_url = "https://api.openai.com/v1"
+model = ""                      # required for this backend, e.g. "gpt-4o-mini"
+api_key_env = "OPENAI_API_KEY"  # environment variable that holds the key (checked first)
+api_key_credential = ""         # or a generic credential in Windows Credential Manager, e.g. created with
+                                #   cmdkey /generic:handy-remote-feedback /user:api /pass
+                                # and named here as "handy-remote-feedback"
+temperature = 0.2
+json_mode = true                # send response_format = json_object (turn off if the server rejects it)

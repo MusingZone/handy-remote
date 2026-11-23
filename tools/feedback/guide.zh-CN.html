@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>语音反馈使用说明</title>
+    <style>
+      :root {
+        --a: #e8780c;
+        --b: #2f80ed;
+        --t: #1d1d1f;
+        --m: #666;
+        --bg: #fafafa;
+      }
+      body {
+        font:
+          15px/1.7 "Microsoft YaHei UI",
+          "Segoe UI",
+          sans-serif;
+        color: var(--t);
+        background: var(--bg);
+        max-width: 760px;
+        margin: 32px auto;
+        padding: 0 20px;
+      }
+      h1 {
+        font-size: 22px;
+        margin-bottom: 4px;
+      }
+      .sub {
+        color: var(--m);
+        margin-top: 0;
+      }
+      h2 {
+        font-size: 17px;
+        margin-top: 28px;
+        border-bottom: 1px solid #e5e5e5;
+        padding-bottom: 4px;
+      }
+      ol.flow {
+        counter-reset: s;
+        list-style: none;
+        padding: 0;
+      }
+      ol.flow > li {
+        counter-increment: s;
+        position: relative;
+        padding: 10px 12px 10px 48px;
+        margin: 8px 0;
+        background: #fff;
+        border: 1px solid #e8e8e8;
+        border-radius: 10px;
+      }
+      ol.flow > li::before {
+        content: counter(s);
+        position: absolute;
+        left: 12px;
+        top: 10px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: var(--t);
+        color: #fff;
+        text-align: center;
+        line-height: 24px;
+        font-size: 13px;
+      }
+      .who {
+        font-size: 12px;
+        color: var(--m);
+        margin-left: 6px;
+      }
+      .dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        vertical-align: middle;
+        margin: 0 2px;
+      }
+      .o {
+        background: var(--a);
+      }
+      .bl {
+        background: var(--b);
+      }
+      kbd {
+        font:
+          12px Consolas,
+          monospace;
+        background: #fff;
+        border: 1px solid #ccc;
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        padding: 0 5px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        background: #fff;
+      }
+      td,
+      th {
+        border: 1px solid #e5e5e5;
+        padding: 6px 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: #f3f3f3;
+        font-weight: 600;
+      }
+      .note {
+        background: #fff8ec;
+        border-left: 3px solid var(--a);
+        padding: 8px 12px;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>语音反馈使用说明</h1>
+    <p class="sub">
+      识别错了，花 10
+      秒报告一下；之后的分析、调整、验证都在后台完成，不会弹窗打断你。
+    </p>
+
+    <h2>一次反馈的完整流程</h2>
+    <ol class="flow">
+      <li>
+        <b>报告</b><span class="who">你</span><br />
+        刚说完发现有错：按你给
+        <code>voice_feedback.py report</code> 绑定的快捷键，或在 Handy Remote
+        托盘菜单里选择反馈上一次识别。
+        弹出的窗口里默认选中最近一条，直接把错的地方改对，<kbd>Ctrl</kbd>+<kbd
+          >Enter</kbd
+        >
+        提交。
+        勾选「替换上屏文字」时，只要光标仍在那段文字末尾，原窗口里的文字就会被直接改成你的修正版（不对可
+        <kbd>Ctrl</kbd>+<kbd>Z</kbd>）。
+      </li>
+      <li>
+        <b>分析</b><span class="who">后台，约 1 分钟</span><br />
+        托盘图标出现 <span class="dot bl"></span
+        ><b>蓝点</b
+        >。后台把这条听写的文字、服务端当时的识别记录（草稿、原始与最终文本、耗时）和你的修正版交给所配置的分析器
+        （Copilot CLI 或兼容 OpenAI
+        接口的模型；录音只留在本机），判断是哪类问题，并只提出安全的改动：加热词、加替换规则、调流式参数；
+        需要改代码的问题记入待办。替换规则会先在你的历史听写里试跑，显示会影响多少条。
+      </li>
+      <li>
+        <b>等你审阅</b><span class="who">你，有空时</span><br />
+        分析完成后蓝点变为 <span class="dot o"></span
+        ><b>橙点</b>。不用急，橙点会一直等你。
+        单击托盘图标打开改进建议，每条建议都写了理由，可信度高的已预先勾选。
+        选「应用所选」「全部拒绝」或「稍后再看」。
+      </li>
+      <li>
+        <b>生效</b><span class="who">后台，几秒</span><br />
+        接受的改动写入服务端词库（服务端和本机都会先备份旧版本），服务端热加载，<b>下一句话就生效</b>，不用重启。
+      </li>
+      <li>
+        <b>自动验证</b><span class="who">后台</span><br />
+        用新词库把你报告的那段录音重新识别一遍，和你的修正版比对。
+        <b>效果变好或持平：什么也不提示。</b>
+        只有变差或验证失败时，托盘才再出现橙点；单击图标即可看到说明。
+      </li>
+    </ol>
+
+    <h2>托盘图标的含义</h2>
+    <table>
+      <tr>
+        <th>图标</th>
+        <th>含义</th>
+        <th>单击图标</th>
+      </tr>
+      <tr>
+        <td>普通图标</td>
+        <td>没有待办</td>
+        <td>打开 Handy Remote</td>
+      </tr>
+      <tr>
+        <td><span class="dot bl"></span> 蓝点</td>
+        <td>正在分析你刚提交的反馈</td>
+        <td>打开 Handy Remote（分析完会自动变化）</td>
+      </tr>
+      <tr>
+        <td><span class="dot o"></span> 橙点</td>
+        <td>有改进建议待审，或有一条提醒</td>
+        <td>打开审阅窗口 / 提醒</td>
+      </tr>
+    </table>
+    <p>托盘菜单里也有查看改进建议、反馈上一次识别和本说明的入口。</p>
+
+    <h2>什么样的问题值得报告</h2>
+    <ul>
+      <li>人名、产品名、英文术语总被写错：最容易通过热词或替换规则修好。</li>
+      <li>某个词总被替换成同音字。</li>
+      <li>
+        标点明显不对：多了逗号、该断句没断。这类问题会调整断句参数或记入待办。
+      </li>
+      <li>漏字、吞字、延迟太大：会附带服务端记录，便于定位原因。</li>
+    </ul>
+    <p class="note">
+      偶尔一次说得含糊导致的错误，不必报告。一条报告只针对一句话，修正版里只改错的地方，其余保持原样，分析会更准确。
+    </p>
+
+    <h2>数据放在哪里</h2>
+    <ul>
+      <li>
+        报告：<code>%LOCALAPPDATA%\handy-remote\feedback\reports\</code>（录音、你的修正版、分析结果和你的决定），
+        除非在 <code>reports_dir</code> 里另行指定。
+      </li>
+      <li>
+        本机词库备份：<code>...\feedback\lexicon-history\</code>；服务端另有自己的历史备份。
+      </li>
+      <li>需要改代码的待办：<code>...\feedback\backlog.md</code>。</li>
+      <li>
+        设置：<code>%APPDATA%\handy-remote\feedback.toml</code>（参见
+        <code>feedback.example.toml</code>）。
+      </li>
+    </ul>
+  </body>
+</html>

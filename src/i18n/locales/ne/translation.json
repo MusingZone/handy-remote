@@ -10,7 +10,13 @@
     "secureInputWarning": "⚠ Secure Input ले सर्टकटहरू रोकेको छ",
     "language": "भाषा",
     "autoLanguage": "स्वतः",
-    "otherLanguages": "अन्य भाषाहरू"
+    "otherLanguages": "अन्य भाषाहरू",
+    "voiceReview": "● सुझावहरू हेर्नुहोस् ({count} पर्खाइमा)",
+    "voiceAnalyzing": "तपाईंको प्रतिक्रिया विश्लेषण गर्दै…",
+    "voiceNoPending": "पर्खाइमा कुनै सुझाव छैन",
+    "voiceTooltipPending": "{count} डिक्टेसन सुझाव पर्खाइमा (आइकनमा क्लिक गर्नुहोस्)",
+    "voiceReport": "अघिल्लो डिक्टेसन रिपोर्ट गर्नुहोस्…",
+    "voiceGuide": "डिक्टेसन प्रतिक्रिया गाइड"
   },
   "sidebar": {
     "general": "सामान्य",
@@ -19,7 +25,9 @@
     "postProcessing": "पोस्ट प्रोसेस",
     "history": "हिस्ट्री",
     "debug": "डिबग",
-    "about": "बारेमा"
+    "about": "बारेमा",
+    "remote": "रिमोट",
+    "cloud": "Cloud"
   },
   "onboarding": {
     "customModelDescription": "आधिकारिक रूपमा समर्थित छैन",
@@ -144,6 +152,7 @@
       },
       "model": "मोडेल",
       "showAll": "सबै {{count}} मोडेल देखाउनुहोस्",
+      "useServer": "मसँग Handy Remote सर्भर छ",
       "download": "{{size}} डाउनलोड गर्नुहोस्",
       "downloadInstead": "बरु {{size}} डाउनलोड गर्नुहोस्",
       "pauses": "{{name}} {{percent}}% मा रोकिन्छ",
@@ -666,6 +675,52 @@
           "placeholderWithOptions": "मोडेल खोज्नुहोस् वा चयन गर्नुहोस्",
           "placeholderNoOptions": "मोडेलको नाम टाइप गर्नुहोस्",
           "refreshModels": "मोडेलहरू रिफ्रेस गर्नुहोस्"
+        },
+        "endpoint": {
+          "import": "Import endpoints",
+          "imported": "Imported {{count}} endpoints",
+          "importFailed": "Could not import endpoints",
+          "auth": "Authentication",
+          "authDescription": "Send only the selected authentication header. Automatic uses Bearer for OpenAI and x-api-key for Anthropic.",
+          "authFailed": "Could not save authentication",
+          "authOptions": {
+            "auto": "Automatic",
+            "bearer": "Bearer token",
+            "api_key": "api-key header",
+            "none": "None"
+          }
+        }
+      },
+      "refine": {
+        "title": "Refine with a language model",
+        "always": {
+          "label": "Refine every dictation",
+          "description": "Send every dictation through the model and prompt above before it is pasted, not only the post-processing shortcut. Live pasting while you speak is turned off, and pasting waits for the model."
+        },
+        "detect": {
+          "label": "Local models",
+          "description": "Find language model servers running on this computer (Ollama, LM Studio, llama.cpp, Foundry Local, OpenVINO Model Server, Lemonade) and the Copilot bridge. Text stays on this computer, except through the Copilot bridge, which passes it to GitHub Copilot.",
+          "button": "Find local models",
+          "running": "Searching…",
+          "none": "No local model server answered. Start one (for example Ollama with a small instruct model such as qwen2.5:3b) and search again.",
+          "recommended": "recommended",
+          "use": "Use"
+        },
+        "benchmark": {
+          "label": "Speed test",
+          "description": "Run the selected provider, model and prompt on a sample dictation (one warm-up, then three timed runs) and show the result.",
+          "button": "Run speed test",
+          "running": "Testing…",
+          "result": "{{model}}: median {{ms}} ms ({{runs}} ms)"
+        },
+        "rules": {
+          "label": "My rules",
+          "description": "Your own instructions for the model, one per line, such as how to write floors, numbers or product names. They are added to the selected prompt for every dictation and take priority over its rules. Lines starting with # are comments. The file is read on every dictation, so you can also edit it in any editor or keep it in a synced folder. Your custom words are always kept exactly as written.",
+          "placeholder": "# One rule per line, for example:\nWrite floors as digits: 三楼 → 3楼\nAlways write \"Copilot\" with a capital C",
+          "save": "Save rules",
+          "saved": "Saved, {{count}} rules in use.",
+          "file": "Rules file",
+          "useFile": "Use this file"
         }
       },
       "prompts": {
@@ -898,6 +953,139 @@
           "details": "Handy को स्थानीय स्पिच-टु-टेक्स्ट transcribe.cpp र ggml मा आधारित छ। Georgi Gerganov र योगदानकर्ताहरूको उत्कृष्ट कामका लागि धन्यवाद।"
         }
       }
+    },
+    "remote": {
+      "intro": "पहिचान Handy Remote सर्भरमा चलाउनुहोस्, जस्तै तपाईंको नेटवर्कको बढी शक्तिशाली कम्प्युटर, SSH मार्फत। सक्रिय हुँदा स्थानीय मोडेल प्रयोग हुँदैनन्।",
+      "guide": "सेटअप गाइड",
+      "groups": {
+        "recognition": "पहिचान",
+        "connection": "जडान",
+        "key": "पहुँच कुञ्जी"
+      },
+      "enabled": {
+        "label": "रिमोट सर्भर प्रयोग गर्नुहोस्",
+        "description": "डिक्टेसन यो कम्प्युटरको सट्टा तलको सर्भरमा पहिचान हुन्छ।"
+      },
+      "incremental_paste": {
+        "label": "बोल्दै गर्दा टाँस्नुहोस्",
+        "description": "रेकर्डिङ चलिरहँदा नै हरेक पूरा वाक्य टाँस्छ।"
+      },
+      "rdp_caret": {
+        "label": "रिमोट डेस्कटपमा कर्सर पछ्याउनुहोस्",
+        "description": "रिमोट डेस्कटप विन्डो अगाडि हुँदा, ओभरले भित्रको एपको कर्सरमुनि देखिन्छ। सर्भरमा कर्सर सहायक चाहिन्छ।"
+      },
+      "rdp_dictation": {
+        "label": "रिमोट डेस्कटप भित्र डिक्टेट गर्नुहोस्",
+        "description": "रिमोट डेस्कटप विन्डो अगाडि हुँदा, डिक्टेसन सर्टकटले रिमोट सत्रभित्रको Handy सुरु गर्छ, जसले रिडाइरेक्ट गरिएको माइक्रोफोन रेकर्ड गरी त्यहीँ टाँस्छ। सर्भरमा कर्सर सहायक चाहिन्छ; नत्र यहीँ डिक्टेट हुन्छ।"
+      },
+      "pairing": {
+        "label": "जोडा कोड",
+        "description": "तलका फिल्ड भर्न सर्भरमा \"doctor.py pair\" ले छापेको कोड टाँस्नुहोस्।",
+        "apply": "लागू गर्नुहोस्",
+        "applied": "जोडा कोडबाट भरियो। परीक्षण गरेर सेभ गर्नुहोस्।",
+        "invalid": "अमान्य जोडा कोड: {{error}}"
+      },
+      "host": {
+        "label": "सर्भर",
+        "description": "सर्भरको होस्ट नाम वा ठेगाना। सर्भर यही कम्प्युटरमा भए localhost।"
+      },
+      "user": {
+        "label": "SSH प्रयोगकर्ता",
+        "description": "सर्भरमा साइन इन गर्ने खाता।"
+      },
+      "ssh_port": {
+        "label": "SSH पोर्ट",
+        "description": "सर्भरको SSH पोर्ट, प्रायः 22।"
+      },
+      "server_port": {
+        "label": "सर्भर पोर्ट",
+        "description": "पहिचान सर्भरले सर्भरमै सुन्ने पोर्ट।"
+      },
+      "caret_port": {
+        "label": "कर्सर सहायक पोर्ट",
+        "description": "सर्भरमा कर्सर सहायकको पोर्ट।"
+      },
+      "identity_file": {
+        "label": "SSH कुञ्जी फाइल",
+        "description": "साइन इनका लागि निजी कुञ्जी। खाली: यो एपको आफ्नै कुञ्जी भए त्यो, नभए SSH पूर्वनिर्धारित।"
+      },
+      "ssh_path": {
+        "label": "ssh प्रोग्राम",
+        "description": "ssh को मार्ग। खाली: स्वतः खोजिन्छ।",
+        "missing": "ssh फेला परेन"
+      },
+      "host_key": {
+        "label": "सर्भर कुञ्जी",
+        "description": "जोडा कोडबाट सर्भरको SSH होस्ट कुञ्जी। सेट भएमा फरक कुञ्जी भएको सर्भर अस्वीकार हुन्छ।",
+        "none": "पिन गरिएको छैन",
+        "clear": "हटाउनुहोस्"
+      },
+      "client_key": {
+        "label": "यो कम्प्युटरको कुञ्जी",
+        "description": "यो कुञ्जी एक पटक अधिकृत गर्नुहोस्: सर्भरको फोल्डरमा तलको आदेश चलाउनुहोस्।",
+        "none": "अहिलेसम्म कुञ्जी छैन।",
+        "create": "कुञ्जी बनाउनुहोस्",
+        "copy": "आदेश कपी गर्नुहोस्",
+        "copied": "कपी भयो"
+      },
+      "test": {
+        "button": "जडान जाँच्नुहोस्",
+        "running": "जाँच्दै…",
+        "connected": "{{connect}} ms मा जडान भयो; सर्भरले {{roundTrip}} ms मा जवाफ दियो।",
+        "oldServer": "सर्भर पुरानो संस्करण हो र विवरण दिँदैन।",
+        "loaded": "मोडेलहरू लोड छन्।",
+        "sleeping": "मोडेलहरू अनलोड छन्; पहिलो डिक्टेसनमा लोड हुन्छन् (केही सेकेन्ड)।",
+        "failed": "जडान असफल: {{error}}"
+      },
+      "save": "सेभ गर्नुहोस्",
+      "revert": "फर्काउनुहोस्",
+      "saved": "सेभ भयो।",
+      "automatic": "स्वचालित"
+    },
+    "cloudAsr": {
+      "intro": "Recognize speech with a public cloud speech-to-text service of your choice (OpenAI, Azure, Google, Deepgram, AssemblyAI, ElevenLabs, Groq, Mistral, Alibaba Qwen3-ASR, SiliconFlow, or any OpenAI-compatible server). Each recording is uploaded once when it ends; there is no live preview.",
+      "privacy": "Your audio leaves this computer and is processed under the provider's terms. API keys are stored only in this computer's settings.",
+      "saved": "Saved.",
+      "save": "Save",
+      "revert": "Revert",
+      "groups": {
+        "recognition": "Recognition",
+        "service": "Service"
+      },
+      "enabled": {
+        "label": "Use cloud recognition",
+        "description": "Send dictation to the service below instead of recognizing on this computer or a remote server."
+      },
+      "provider": {
+        "label": "Provider",
+        "description": "Endpoint, model and key are remembered per provider."
+      },
+      "base_url": {
+        "label": "Endpoint",
+        "description": "Leave empty for the default. Change it for another region, a proxy, or a compatible server."
+      },
+      "model": {
+        "label": "Model",
+        "description": "Leave empty for the default model."
+      },
+      "api_key": {
+        "label": "API key",
+        "description": "Required by this provider.",
+        "optional": "Optional: only if your server asks for one.",
+        "placeholder": "Paste the key",
+        "saved": "Saved (type to replace)",
+        "get": "Get a key"
+      },
+      "timeout": {
+        "label": "Timeout (s)",
+        "description": "Longest wait for one recognition, upload included."
+      },
+      "test": {
+        "button": "Test",
+        "running": "Sending a one-second test sound…",
+        "failed": "Test failed: {{error}}",
+        "ok": "Works: answered in {{ms}} ms (recognized: {{text}})."
+      }
     }
   },
   "footer": {
@@ -982,7 +1170,11 @@
   "overlay": {
     "transcribing": "ट्रान्सक्राइब गरिँदैछ...",
     "processing": "प्रशोधन गरिँदैछ...",
-    "loadingModel": "मोडेल लोड गरिँदैछ..."
+    "loadingModel": "मोडेल लोड गरिँदैछ...",
+    "remoteWaking": "सर्भरका मोडेलहरू ब्युँझाउँदै…",
+    "speakNow": "अब बोल्नुहोस्",
+    "refineOn": "यो डिक्टेसन परिमार्जन गरिनेछ · छोड्न क्लिक गर्नुहोस्",
+    "refineOff": "यो डिक्टेसन परिमार्जन गरिने छैन · परिमार्जन गर्न क्लिक गर्नुहोस्"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} ले 1 सर्टकट रोकिरहेको हुन सक्छ",

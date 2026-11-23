@@ -951,6 +951,7 @@ impl TranscriptionManager {
     /// Abandon any live decode without producing text (e.g. on cancel). A
     /// chunk already decoding finishes; audio queued behind it is dropped.
     pub fn cancel_stream(&self) {
+        crate::incremental_paste::abort();
         if let Some(route) = self.router.take() {
             route.cancelled.store(true, Ordering::Release);
             let _ = route.tx.send(StreamCmd::Cancel);

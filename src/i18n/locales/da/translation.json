@@ -10,7 +10,13 @@
     "secureInputWarning": "⚠ Genveje blokeret af Secure Input",
     "language": "Sprog",
     "autoLanguage": "Automatisk",
-    "otherLanguages": "Andre sprog"
+    "otherLanguages": "Andre sprog",
+    "voiceReview": "● Gennemse forslag ({count} venter)",
+    "voiceAnalyzing": "Analyserer din feedback…",
+    "voiceNoPending": "Ingen ventende forslag",
+    "voiceTooltipPending": "{count} dikteringsforslag venter (klik på ikonet)",
+    "voiceReport": "Rapportér seneste diktering…",
+    "voiceGuide": "Vejledning til dikteringsfeedback"
   },
   "sidebar": {
     "general": "Generelt",
@@ -19,7 +25,9 @@
     "postProcessing": "Efterbehandling",
     "history": "Historik",
     "debug": "Fejlfinding",
-    "about": "Om"
+    "about": "Om",
+    "remote": "Fjern",
+    "cloud": "Cloud"
   },
   "onboarding": {
     "customModelDescription": "Ikke officielt understøttet",
@@ -144,6 +152,7 @@
       },
       "model": "Model",
       "showAll": "Vis alle {{count}} modeller",
+      "useServer": "Jeg har en Handy Remote-server",
       "download": "Download {{size}}",
       "downloadInstead": "Download {{size}} i stedet",
       "pauses": "{{name}} holder pause ved {{percent}} %",
@@ -666,6 +675,52 @@
           "placeholderWithOptions": "Søg eller vælg en model",
           "placeholderNoOptions": "Skriv et modelnavn",
           "refreshModels": "Opdater modeller"
+        },
+        "endpoint": {
+          "import": "Import endpoints",
+          "imported": "Imported {{count}} endpoints",
+          "importFailed": "Could not import endpoints",
+          "auth": "Authentication",
+          "authDescription": "Send only the selected authentication header. Automatic uses Bearer for OpenAI and x-api-key for Anthropic.",
+          "authFailed": "Could not save authentication",
+          "authOptions": {
+            "auto": "Automatic",
+            "bearer": "Bearer token",
+            "api_key": "api-key header",
+            "none": "None"
+          }
+        }
+      },
+      "refine": {
+        "title": "Refine with a language model",
+        "always": {
+          "label": "Refine every dictation",
+          "description": "Send every dictation through the model and prompt above before it is pasted, not only the post-processing shortcut. Live pasting while you speak is turned off, and pasting waits for the model."
+        },
+        "detect": {
+          "label": "Local models",
+          "description": "Find language model servers running on this computer (Ollama, LM Studio, llama.cpp, Foundry Local, OpenVINO Model Server, Lemonade) and the Copilot bridge. Text stays on this computer, except through the Copilot bridge, which passes it to GitHub Copilot.",
+          "button": "Find local models",
+          "running": "Searching…",
+          "none": "No local model server answered. Start one (for example Ollama with a small instruct model such as qwen2.5:3b) and search again.",
+          "recommended": "recommended",
+          "use": "Use"
+        },
+        "benchmark": {
+          "label": "Speed test",
+          "description": "Run the selected provider, model and prompt on a sample dictation (one warm-up, then three timed runs) and show the result.",
+          "button": "Run speed test",
+          "running": "Testing…",
+          "result": "{{model}}: median {{ms}} ms ({{runs}} ms)"
+        },
+        "rules": {
+          "label": "My rules",
+          "description": "Your own instructions for the model, one per line, such as how to write floors, numbers or product names. They are added to the selected prompt for every dictation and take priority over its rules. Lines starting with # are comments. The file is read on every dictation, so you can also edit it in any editor or keep it in a synced folder. Your custom words are always kept exactly as written.",
+          "placeholder": "# One rule per line, for example:\nWrite floors as digits: 三楼 → 3楼\nAlways write \"Copilot\" with a capital C",
+          "save": "Save rules",
+          "saved": "Saved, {{count}} rules in use.",
+          "file": "Rules file",
+          "useFile": "Use this file"
         }
       },
       "prompts": {
@@ -898,6 +953,139 @@
           "details": "Handys lokale tale-til-tekst funktionalitet er bygget på transcribe.cpp og ggml. Tak for det fantastiske arbejde af Georgi Gerganov og bidragyderne."
         }
       }
+    },
+    "remote": {
+      "intro": "Kør genkendelsen på en Handy Remote-server, fx en kraftigere computer på netværket, via SSH. Mens dette er slået til, bruges de lokale modeller ikke.",
+      "guide": "Opsætningsvejledning",
+      "groups": {
+        "recognition": "Genkendelse",
+        "connection": "Forbindelse",
+        "key": "Adgangsnøgle"
+      },
+      "enabled": {
+        "label": "Brug fjernserver",
+        "description": "Diktering genkendes på serveren nedenfor i stedet for på denne computer."
+      },
+      "incremental_paste": {
+        "label": "Indsæt mens du taler",
+        "description": "Indsæt hver færdig sætning, mens du stadig optager."
+      },
+      "rdp_caret": {
+        "label": "Følg markøren i Fjernskrivebord",
+        "description": "Når et Fjernskrivebord-vindue er i forgrunden, vises overlayet under markøren i appen derinde. Kræver markørhjælperen på serveren."
+      },
+      "rdp_dictation": {
+        "label": "Dikter i Fjernskrivebord",
+        "description": "Når et Fjernskrivebord-vindue er forrest, starter dikteringsgenvejen Handy i fjernsessionen, som optager den omdirigerede mikrofon og indsætter teksten dér. Kræver markørhjælperen på serveren; ellers dikteres der her."
+      },
+      "pairing": {
+        "label": "Parringskode",
+        "description": "Indsæt koden, som \"doctor.py pair\" udskriver på serveren, for at udfylde felterne nedenfor.",
+        "apply": "Anvend",
+        "applied": "Udfyldt fra parringskoden. Test og gem derefter.",
+        "invalid": "Ugyldig parringskode: {{error}}"
+      },
+      "host": {
+        "label": "Server",
+        "description": "Værtsnavn eller adresse på serveren. localhost hvis serveren kører på denne computer."
+      },
+      "user": {
+        "label": "SSH-bruger",
+        "description": "Konto til login på serveren."
+      },
+      "ssh_port": {
+        "label": "SSH-port",
+        "description": "Serverens SSH-port, normalt 22."
+      },
+      "server_port": {
+        "label": "Serverport",
+        "description": "Porten som genkendelsesserveren lytter på, på selve serveren."
+      },
+      "caret_port": {
+        "label": "Markørhjælperens port",
+        "description": "Port til markørhjælperen på serveren."
+      },
+      "identity_file": {
+        "label": "SSH-nøglefil",
+        "description": "Privat nøgle til login. Tom: appens egen nøgle hvis den findes, ellers SSH's standarder."
+      },
+      "ssh_path": {
+        "label": "ssh-program",
+        "description": "Sti til ssh. Tom: findes automatisk.",
+        "missing": "ssh blev ikke fundet"
+      },
+      "host_key": {
+        "label": "Servernøgle",
+        "description": "Serverens SSH-værtsnøgle fra parringskoden. Når den er sat, afvises en server med en anden nøgle.",
+        "none": "Ikke fastlåst",
+        "clear": "Ryd"
+      },
+      "client_key": {
+        "label": "Denne computers nøgle",
+        "description": "Godkend nøglen én gang: kør kommandoen nedenfor i serverens mappe.",
+        "none": "Ingen nøgle endnu.",
+        "create": "Opret nøgle",
+        "copy": "Kopiér kommando",
+        "copied": "Kopieret"
+      },
+      "test": {
+        "button": "Test forbindelse",
+        "running": "Tester…",
+        "connected": "Forbundet på {{connect}} ms; serveren svarede på {{roundTrip}} ms.",
+        "oldServer": "Serveren er en ældre version og giver ingen detaljer.",
+        "loaded": "Modellerne er indlæst.",
+        "sleeping": "Modellerne er fjernet fra hukommelsen; de indlæses ved første diktering (få sekunder).",
+        "failed": "Forbindelsen mislykkedes: {{error}}"
+      },
+      "save": "Gem",
+      "revert": "Fortryd",
+      "saved": "Gemt.",
+      "automatic": "Automatisk"
+    },
+    "cloudAsr": {
+      "intro": "Recognize speech with a public cloud speech-to-text service of your choice (OpenAI, Azure, Google, Deepgram, AssemblyAI, ElevenLabs, Groq, Mistral, Alibaba Qwen3-ASR, SiliconFlow, or any OpenAI-compatible server). Each recording is uploaded once when it ends; there is no live preview.",
+      "privacy": "Your audio leaves this computer and is processed under the provider's terms. API keys are stored only in this computer's settings.",
+      "saved": "Saved.",
+      "save": "Save",
+      "revert": "Revert",
+      "groups": {
+        "recognition": "Recognition",
+        "service": "Service"
+      },
+      "enabled": {
+        "label": "Use cloud recognition",
+        "description": "Send dictation to the service below instead of recognizing on this computer or a remote server."
+      },
+      "provider": {
+        "label": "Provider",
+        "description": "Endpoint, model and key are remembered per provider."
+      },
+      "base_url": {
+        "label": "Endpoint",
+        "description": "Leave empty for the default. Change it for another region, a proxy, or a compatible server."
+      },
+      "model": {
+        "label": "Model",
+        "description": "Leave empty for the default model."
+      },
+      "api_key": {
+        "label": "API key",
+        "description": "Required by this provider.",
+        "optional": "Optional: only if your server asks for one.",
+        "placeholder": "Paste the key",
+        "saved": "Saved (type to replace)",
+        "get": "Get a key"
+      },
+      "timeout": {
+        "label": "Timeout (s)",
+        "description": "Longest wait for one recognition, upload included."
+      },
+      "test": {
+        "button": "Test",
+        "running": "Sending a one-second test sound…",
+        "failed": "Test failed: {{error}}",
+        "ok": "Works: answered in {{ms}} ms (recognized: {{text}})."
+      }
     }
   },
   "footer": {
@@ -982,7 +1170,11 @@
   "overlay": {
     "transcribing": "Transskriberer...",
     "processing": "Behandler...",
-    "loadingModel": "Indlæser model..."
+    "loadingModel": "Indlæser model...",
+    "remoteWaking": "Vækker serverens modeller…",
+    "speakNow": "Tal nu",
+    "refineOn": "Denne diktering bliver finpudset · klik for at springe over",
+    "refineOff": "Denne diktering bliver ikke finpudset · klik for at finpudse"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} blokerer muligvis 1 genvej",

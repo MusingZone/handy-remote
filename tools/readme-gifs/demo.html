@@ -1,0 +1,134 @@
+<!doctype html>
+<!-- A stand-in text editor for the README animations. The overlay in the iframe is the app's real
+     overlay page (src/overlay/index.html); record.mjs drives it with the events the app emits. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dictation demo</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #e8eaee;
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }
+      .win {
+        position: absolute;
+        inset: 18px 18px 40px 18px;
+        background: #fff;
+        border: 1px solid #cfd3da;
+        border-radius: 10px;
+        box-shadow: 0 6px 24px rgba(30, 40, 60, 0.12);
+        overflow: hidden;
+      }
+      .bar {
+        height: 34px;
+        display: flex;
+        align-items: center;
+        padding: 0 14px;
+        font-size: 13px;
+        color: #555b66;
+        border-bottom: 1px solid #e3e6eb;
+        background: #f7f8fa;
+      }
+      .doc {
+        padding: 18px 24px;
+        font-size: 17px;
+        line-height: 1.6;
+        color: #1d2129;
+        white-space: pre-wrap;
+        font-family: "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+      }
+      .caret {
+        display: inline-block;
+        width: 2px;
+        height: 1.15em;
+        margin-left: 1px;
+        vertical-align: -0.2em;
+        background: #1d2129;
+        animation: blink 1s steps(1) infinite;
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+      .new {
+        background: #fff3b0;
+        transition: background 900ms ease-out;
+      }
+      .new.done {
+        background: transparent;
+      }
+      iframe {
+        position: absolute;
+        width: 400px;
+        height: 120px;
+        border: 0;
+        background: transparent;
+        transition:
+          left 160ms ease-out,
+          top 160ms ease-out;
+      }
+      .caption {
+        position: absolute;
+        left: 20px;
+        right: 20px;
+        bottom: 11px;
+        font-size: 12px;
+        color: #6b7280;
+        display: flex;
+        justify-content: space-between;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="win">
+      <div class="bar" id="title">Notes</div>
+      <div class="doc" id="doc">
+        <span id="text"></span><span class="caret" id="caret"></span>
+      </div>
+    </div>
+    <iframe
+      id="overlay"
+      src="/src/overlay/index.html"
+      allowtransparency="true"
+    ></iframe>
+    <div class="caption"><span id="capL"></span><span id="capR"></span></div>
+    <script>
+      const text = document.getElementById("text");
+      const caret = document.getElementById("caret");
+      const frame = document.getElementById("overlay");
+      // Hang the overlay under the caret, as the app does on Windows.
+      const follow = () => {
+        const r = caret.getBoundingClientRect();
+        const left = Math.max(
+          8,
+          Math.min(window.innerWidth - 408, r.left - 200),
+        );
+        frame.style.left = left + "px";
+        frame.style.top = r.bottom + 6 + "px";
+      };
+      window.demo = {
+        setup({ title, initial, left, right }) {
+          document.getElementById("title").textContent = title;
+          text.textContent = initial || "";
+          document.getElementById("capL").textContent = left || "";
+          document.getElementById("capR").textContent = right || "";
+          follow();
+        },
+        paste(s) {
+          const span = document.createElement("span");
+          span.className = "new";
+          span.textContent = s;
+          text.appendChild(span);
+          follow();
+          setTimeout(() => span.classList.add("done"), 400);
+        },
+        follow,
+      };
+      follow();
+    </script>
+  </body>
+</html>

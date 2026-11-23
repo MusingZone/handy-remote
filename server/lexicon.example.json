@@ -1,0 +1,6 @@
+{
+  "_comment": "Copy to <home>/config/lexicon.json. Hot-reloaded. hotwords bias Qwen3-ASR through its context prompt; replacements are regex fixes applied to final text (case-sensitive unless (?i)); stream overrides the server's streaming parameters (see docs/remote/CONFIGURATION.md).",
+  "hotwords": ["Handy", "OpenVINO", "PowerShell", "GitHub"],
+  "replacements": [{ "from": "(?i)open vino", "to": "OpenVINO" }],
+  "stream": {}
+}

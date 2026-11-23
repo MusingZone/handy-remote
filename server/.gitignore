@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv*/
+# runtime data belongs in the server home, never in the repo
+models/
+ov_cache/
+logs/
+config/
+*.wav

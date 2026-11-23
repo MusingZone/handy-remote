@@ -10,7 +10,13 @@
     "secureInputWarning": "⚠ 快捷键被 Secure Input 阻止",
     "language": "语言",
     "autoLanguage": "自动",
-    "otherLanguages": "其他语言"
+    "otherLanguages": "其他语言",
+    "voiceReview": "● 查看改进建议（{count} 条待审）",
+    "voiceAnalyzing": "正在分析你的反馈…",
+    "voiceNoPending": "暂无待审的改进建议",
+    "voiceTooltipPending": "有 {count} 条听写改进建议待审（单击图标查看）",
+    "voiceReport": "反馈上一次识别…",
+    "voiceGuide": "听写反馈使用说明"
   },
   "sidebar": {
     "general": "通用",
@@ -19,7 +25,9 @@
     "postProcessing": "后处理",
     "history": "历史记录",
     "debug": "调试",
-    "about": "关于"
+    "about": "关于",
+    "remote": "远程",
+    "cloud": "云端识别"
   },
   "onboarding": {
     "customModelDescription": "非官方支持",
@@ -144,6 +152,7 @@
       },
       "model": "模型",
       "showAll": "显示全部 {{count}} 个模型",
+      "useServer": "我有 Handy Remote 识别服务器",
       "download": "下载（{{size}}）",
       "downloadInstead": "改为下载（{{size}}）",
       "pauses": "{{name}}将在 {{percent}}% 时暂停",
@@ -666,6 +675,52 @@
           "placeholderWithOptions": "搜索或选择模型",
           "placeholderNoOptions": "输入模型名称",
           "refreshModels": "刷新模型"
+        },
+        "endpoint": {
+          "import": "导入端点",
+          "imported": "已导入 {{count}} 个端点",
+          "importFailed": "无法导入端点",
+          "auth": "认证方式",
+          "authDescription": "只发送所选的认证头。自动模式下 OpenAI 使用 Bearer，Anthropic 使用 x-api-key。",
+          "authFailed": "无法保存认证方式",
+          "authOptions": {
+            "auto": "自动",
+            "bearer": "Bearer 令牌",
+            "api_key": "api-key 请求头",
+            "none": "无"
+          }
+        }
+      },
+      "refine": {
+        "title": "语言模型润色",
+        "always": {
+          "label": "每次听写都润色",
+          "description": "每次听写在上屏前都经过上面的模型和提示词处理，而不只是后处理快捷键。边说边上屏会关闭，上屏要等模型返回。"
+        },
+        "detect": {
+          "label": "本机模型",
+          "description": "查找本机正在运行的语言模型服务（Ollama、LM Studio、llama.cpp、Foundry Local、OpenVINO Model Server、Lemonade）以及 Copilot 桥接。除 Copilot 桥接会把文本交给 GitHub Copilot 外，文本不会离开本机。",
+          "button": "查找本机模型",
+          "running": "正在查找…",
+          "none": "没有发现本机模型服务。请先启动一个（例如 Ollama 加一个小型指令模型，如 qwen2.5:3b）再查找。",
+          "recommended": "推荐",
+          "use": "使用"
+        },
+        "benchmark": {
+          "label": "速度测试",
+          "description": "用当前服务商、模型和提示词处理一段示例听写（先预热一次，再计时三次），并显示结果。",
+          "button": "开始测试",
+          "running": "正在测试…",
+          "result": "{{model}}：中位数 {{ms}} ms（{{runs}} ms）"
+        },
+        "rules": {
+          "label": "我的规则",
+          "description": "写给模型的个人要求，每行一条，比如楼层、数字、产品名怎么写。每次听写都会加进当前提示词，优先于提示词里的规则。以 # 开头的行是注释。每次听写都会重新读取这个文件，所以也可以用任何编辑器修改，或放在同步文件夹里多台电脑共用。自定义词汇会自动原样保留。",
+          "placeholder": "# 每行一条，例如：\n楼层写成数字：三楼 → 3楼\n“第X点”一律变成编号列表，每点单独一行",
+          "save": "保存规则",
+          "saved": "已保存，共 {{count}} 条规则生效。",
+          "file": "规则文件",
+          "useFile": "使用此文件"
         }
       },
       "prompts": {
@@ -898,6 +953,139 @@
           "details": "Handy 使用 ggml 进行快速的本地语音转文字处理。感谢 Georgi Gerganov 和贡献者们的出色工作。"
         }
       }
+    },
+    "remote": {
+      "intro": "把识别交给一台 Handy Remote 服务器（例如局域网里性能更强的电脑），通过 SSH 连接。开启后不使用本机模型。",
+      "guide": "安装指南",
+      "groups": {
+        "recognition": "识别",
+        "connection": "连接",
+        "key": "访问密钥"
+      },
+      "enabled": {
+        "label": "使用远程服务器",
+        "description": "听写发送到下面的服务器识别，而不是在本机识别。"
+      },
+      "incremental_paste": {
+        "label": "边说边上屏",
+        "description": "录音过程中，每说完一句就先粘贴出来。"
+      },
+      "rdp_caret": {
+        "label": "在远程桌面中跟随光标",
+        "description": "远程桌面窗口在前台时，浮窗显示在其中应用的光标下方。需要服务器上运行光标助手。"
+      },
+      "rdp_dictation": {
+        "label": "在远程桌面里听写",
+        "description": "远程桌面窗口在前台时，听写快捷键改为启动远程会话里的 Handy：它录制重定向过去的麦克风并在远端粘贴。需要服务器上的光标助手；不可用时在本机听写。"
+      },
+      "pairing": {
+        "label": "配对码",
+        "description": "粘贴服务器上 \"doctor.py pair\" 输出的配对码，自动填写下面各项。",
+        "apply": "应用",
+        "applied": "已按配对码填写。请先测试，再保存。",
+        "invalid": "配对码无效：{{error}}"
+      },
+      "host": {
+        "label": "服务器",
+        "description": "服务器的主机名或地址。服务器就在本机时填 localhost。"
+      },
+      "user": {
+        "label": "SSH 用户",
+        "description": "登录服务器所用的账户。"
+      },
+      "ssh_port": {
+        "label": "SSH 端口",
+        "description": "服务器的 SSH 端口，通常为 22。"
+      },
+      "server_port": {
+        "label": "服务端口",
+        "description": "识别服务在服务器本机上监听的端口。"
+      },
+      "caret_port": {
+        "label": "光标助手端口",
+        "description": "服务器上光标助手的端口。"
+      },
+      "identity_file": {
+        "label": "SSH 密钥文件",
+        "description": "登录用的私钥。留空时，若本应用已有自己的密钥就用它，否则用 SSH 默认设置。"
+      },
+      "ssh_path": {
+        "label": "ssh 程序",
+        "description": "ssh 的路径。留空则自动查找。",
+        "missing": "未找到 ssh"
+      },
+      "host_key": {
+        "label": "服务器密钥",
+        "description": "配对码中服务器的 SSH 主机密钥。设置后，密钥不符的服务器会被拒绝。",
+        "none": "未固定",
+        "clear": "清除"
+      },
+      "client_key": {
+        "label": "本机密钥",
+        "description": "只需授权一次：在服务器的程序目录中运行下面的命令。",
+        "none": "还没有密钥。",
+        "create": "创建密钥",
+        "copy": "复制命令",
+        "copied": "已复制"
+      },
+      "test": {
+        "button": "测试连接",
+        "running": "正在测试…",
+        "connected": "{{connect}} 毫秒连上，服务器 {{roundTrip}} 毫秒应答。",
+        "oldServer": "服务器是旧版本，不提供详细信息。",
+        "loaded": "模型已加载。",
+        "sleeping": "模型已卸载，第一次听写时自动加载（需几秒）。",
+        "failed": "连接失败：{{error}}"
+      },
+      "save": "保存",
+      "revert": "还原",
+      "saved": "已保存。",
+      "automatic": "自动"
+    },
+    "cloudAsr": {
+      "intro": "使用你选择的公共云端语音识别服务识别语音（OpenAI、Azure、Google、Deepgram、AssemblyAI、ElevenLabs、Groq、Mistral、阿里通义 Qwen3-ASR、硅基流动，或任何兼容 OpenAI 接口的服务器）。每段录音在结束时上传一次，没有实时预览。",
+      "privacy": "录音会离开本机，按服务商的条款处理。API 密钥只保存在本机设置中。",
+      "saved": "已保存。",
+      "save": "保存",
+      "revert": "撤销修改",
+      "groups": {
+        "recognition": "识别",
+        "service": "服务"
+      },
+      "enabled": {
+        "label": "使用云端识别",
+        "description": "听写发送到下面的云服务识别，而不是在本机或远程服务器识别。"
+      },
+      "provider": {
+        "label": "服务商",
+        "description": "每个服务商的地址、模型和密钥分别保存。"
+      },
+      "base_url": {
+        "label": "接口地址",
+        "description": "留空使用默认地址。可改为其他区域、代理或兼容服务器。"
+      },
+      "model": {
+        "label": "模型",
+        "description": "留空使用默认模型。"
+      },
+      "api_key": {
+        "label": "API 密钥",
+        "description": "此服务商需要密钥。",
+        "optional": "可选：仅当你的服务器需要时填写。",
+        "placeholder": "粘贴密钥",
+        "saved": "已保存（输入新值可替换）",
+        "get": "获取密钥"
+      },
+      "timeout": {
+        "label": "超时（秒）",
+        "description": "一次识别（含上传）最长等待时间。"
+      },
+      "test": {
+        "button": "测试",
+        "running": "正在发送一秒测试音…",
+        "failed": "测试失败：{{error}}",
+        "ok": "可用：{{ms}} 毫秒返回（识别结果：{{text}}）。"
+      }
     }
   },
   "footer": {
@@ -982,7 +1170,11 @@
   "overlay": {
     "transcribing": "正在转录...",
     "processing": "处理中...",
-    "loadingModel": "正在加载模型..."
+    "loadingModel": "正在加载模型...",
+    "remoteWaking": "正在唤醒服务器上的模型…",
+    "speakNow": "请讲",
+    "refineOn": "本次会润色 · 点击跳过",
+    "refineOff": "本次不润色 · 点击恢复"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} 可能正在阻止 1 个快捷键",

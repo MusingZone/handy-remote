@@ -16,10 +16,31 @@ use std::thread;
 /// Send a transcription input to the coordinator.
 /// Used by signal handlers, CLI flags, and any other external trigger.
 pub fn send_transcription_input(app: &AppHandle, binding_id: &str, source: &str) {
+    if forwarded_to_remote_desktop(app) {
+        return;
+    }
     if let Some(c) = app.try_state::<TranscriptionCoordinator>() {
         c.send_external_input(binding_id, source);
     } else {
         warn!("TranscriptionCoordinator not initialized");
+    }
+}
+
+/// Fork: true when a toggle press went to Handy inside the Remote Desktop session in front instead
+/// (see `caret::forward_toggle_to_remote_desktop`). Never while this machine is recording, so the
+/// press that stops a local dictation still reaches it.
+pub fn forwarded_to_remote_desktop(app: &AppHandle) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        let recording = app
+            .try_state::<std::sync::Arc<crate::managers::audio::AudioRecordingManager>>()
+            .is_some_and(|a| a.is_recording());
+        !recording && crate::caret::forward_toggle_to_remote_desktop()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = app;
+        false
     }
 }
 

@@ -24,6 +24,11 @@ pub struct CliArgs {
     #[arg(long)]
     pub cancel: bool,
 
+    /// Open voice feedback (report, review or guide) in the running instance; inside Remote
+    /// Desktop with rdp_dictation on, in the remote session's Handy
+    #[arg(long, value_name = "ACTION")]
+    pub voice_feedback: Option<String>,
+
     /// Enable debug mode with verbose logging
     #[arg(long)]
     pub debug: bool,

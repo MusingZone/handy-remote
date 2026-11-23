@@ -10,6 +10,7 @@ import type {
   ShortcutActivation,
   VadBackend,
   LanguageDetectionMode,
+  RemoteSettings,
 } from "@/bindings";
 import { commands } from "@/bindings";
 import { notify } from "@/stores/noticeStore";
@@ -164,6 +165,8 @@ const settingUpdaters: {
   history_limit: (value) => commands.updateHistoryLimit(value as number),
   post_process_enabled: (value) =>
     commands.changePostProcessEnabledSetting(value as boolean),
+  post_process_always: (value) =>
+    commands.changePostProcessAlwaysSetting(value as boolean),
   post_process_selected_prompt_id: (value) =>
     commands.setPostProcessSelectedPrompt(value as string),
   mute_while_recording: (value) =>
@@ -187,6 +190,15 @@ const settingUpdaters: {
     }
   },
   overlay_style: (value) => commands.changeOverlayStyleSetting(value as string),
+  remote: async (value) => {
+    const result = await commands.changeRemoteSettings(value as RemoteSettings);
+    if (result.status === "error") {
+      notify({ title: result.error });
+      throw new Error(result.error);
+    }
+    // Switching recognition also changes the selected model.
+    await useSettingsStore.getState().refreshSettings();
+  },
   vad_enabled: (value) => commands.changeVadEnabledSetting(value as boolean),
   long_form_chunking: (value) =>
     commands.changeLongFormChunkingSetting(value as boolean),

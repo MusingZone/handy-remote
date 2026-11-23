@@ -16,6 +16,13 @@ pub fn cancel_operation(app: AppHandle) {
     cancel_current_operation(&app);
 }
 
+/// Fork: the overlay's refine switch, for the dictation in progress only.
+#[tauri::command]
+#[specta::specta]
+pub fn set_refine_skipped(skip: bool) {
+    crate::refine::set_take_skipped(skip);
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn is_portable() -> bool {

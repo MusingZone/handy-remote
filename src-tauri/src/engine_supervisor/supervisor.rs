@@ -968,23 +968,33 @@ impl Owner {
         if self.shared.cancelled_since(active.epoch) {
             return Err(EngineError::Cancelled);
         }
-        self.ensure_worker()?;
-        let worker = self.worker.as_mut().expect("worker was just ensured");
         let request = Request::StreamBegin {
             run: run.clone(),
             stream: stream.clone(),
         };
-        match worker.call(&request, None, CALL_FLOOR) {
-            Ok(Response::Ok) => {
-                self.stream = Some(active);
-                Ok(())
-            }
-            Ok(other) => Err(unexpected(&other).into()),
-            Err(failure) => {
-                if failure.worker_lost() {
-                    self.worker_lost("stream start", &failure);
+        // An idle remote worker only learns that its server restarted on the
+        // next call; retry once in a fresh worker so this dictation still streams.
+        let mut retried = false;
+        loop {
+            self.ensure_worker()?;
+            let worker = self.worker.as_mut().expect("worker was just ensured");
+            match worker.call(&request, None, CALL_FLOOR) {
+                Ok(Response::Ok) => {
+                    self.stream = Some(active);
+                    return Ok(());
                 }
-                Err(failure.into())
+                Ok(other) => return Err(unexpected(&other).into()),
+                Err(failure) => {
+                    if !failure.worker_lost() {
+                        return Err(failure.into());
+                    }
+                    self.worker_lost("stream start", &failure);
+                    if retried || self.shared.cancelled_since(active.epoch) {
+                        return Err(failure.into());
+                    }
+                    warn!("Retrying the stream start in a fresh worker");
+                    retried = true;
+                }
             }
         }
     }
@@ -1162,9 +1172,7 @@ struct Worker {
 }
 
 impl Worker {
-    /// Start a worker process. A `cpu_only` worker never registers a GPU
-    /// backend.
-    fn spawn(cpu_only: bool) -> io::Result<Self> {
+    fn local_command(cpu_only: bool) -> io::Result<ProcessCommand> {
         // Under `cargo test` the current exe is the test harness; tests point
         // this at the built app instead.
         #[cfg(test)]
@@ -1185,6 +1193,32 @@ impl Worker {
         if cpu_only {
             command.arg(CPU_ONLY_FLAG);
         }
+        Ok(command)
+    }
+
+    /// Start a worker process. A `cpu_only` worker never registers a GPU
+    /// backend.
+    fn spawn(cpu_only: bool) -> io::Result<Self> {
+        // Fork: with remote recognition the worker is a command that carries the protocol to
+        // the server (`remote.rs`). There is deliberately no local fallback while it is on.
+        #[cfg(not(test))]
+        let remote = crate::remote::worker_spec();
+        #[cfg(test)]
+        let remote: Option<crate::remote::Spec> = None;
+        let mut command = match &remote {
+            Some(r) => {
+                info!(
+                    "transcription worker: remote via {} {:?}",
+                    r.program.display(),
+                    r.args
+                );
+                let mut c = ProcessCommand::new(&r.program);
+                c.args(&r.args);
+                c.envs(r.env.iter().map(|(k, v)| (k, v)));
+                c
+            }
+            None => Self::local_command(cpu_only)?,
+        };
         command
             .env(LOG_LEVEL_ENV, log::max_level().as_str())
             .stdin(Stdio::piped())

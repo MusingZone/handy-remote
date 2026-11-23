@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dictation feedback guide</title>
+    <style>
+      :root {
+        --a: #e8780c;
+        --b: #2f80ed;
+        --t: #1d1d1f;
+        --m: #666;
+        --bg: #fafafa;
+      }
+      body {
+        font:
+          15px/1.7 "Segoe UI",
+          system-ui,
+          sans-serif;
+        color: var(--t);
+        background: var(--bg);
+        max-width: 760px;
+        margin: 32px auto;
+        padding: 0 20px;
+      }
+      h1 {
+        font-size: 22px;
+        margin-bottom: 4px;
+      }
+      .sub {
+        color: var(--m);
+        margin-top: 0;
+      }
+      h2 {
+        font-size: 17px;
+        margin-top: 28px;
+        border-bottom: 1px solid #e5e5e5;
+        padding-bottom: 4px;
+      }
+      ol.flow {
+        counter-reset: s;
+        list-style: none;
+        padding: 0;
+      }
+      ol.flow > li {
+        counter-increment: s;
+        position: relative;
+        padding: 10px 12px 10px 48px;
+        margin: 8px 0;
+        background: #fff;
+        border: 1px solid #e8e8e8;
+        border-radius: 10px;
+      }
+      ol.flow > li::before {
+        content: counter(s);
+        position: absolute;
+        left: 12px;
+        top: 10px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: var(--t);
+        color: #fff;
+        text-align: center;
+        line-height: 24px;
+        font-size: 13px;
+      }
+      .who {
+        font-size: 12px;
+        color: var(--m);
+        margin-left: 6px;
+      }
+      .dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        vertical-align: middle;
+        margin: 0 2px;
+      }
+      .o {
+        background: var(--a);
+      }
+      .bl {
+        background: var(--b);
+      }
+      kbd {
+        font:
+          12px Consolas,
+          monospace;
+        background: #fff;
+        border: 1px solid #ccc;
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        padding: 0 5px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        background: #fff;
+      }
+      td,
+      th {
+        border: 1px solid #e5e5e5;
+        padding: 6px 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: #f3f3f3;
+        font-weight: 600;
+      }
+      .note {
+        background: #fff8ec;
+        border-left: 3px solid var(--a);
+        padding: 8px 12px;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Dictation feedback guide</h1>
+    <p class="sub">
+      When a dictation comes out wrong, report it in ten seconds. Analysis,
+      tuning and verification then happen in the background without interrupting
+      you.
+    </p>
+
+    <h2>One report, start to finish</h2>
+    <ol class="flow">
+      <li>
+        <b>Report</b><span class="who">you</span><br />
+        Right after a wrong dictation, press the report hotkey you bound to
+        <code>voice_feedback.py report</code>, or choose the report entry in the
+        Handy Remote tray menu. The newest dictation is preselected: fix the
+        wrong parts and press <kbd>Ctrl</kbd>+<kbd>Enter</kbd>. With "replace
+        the just-typed text" checked, the text in the original window is
+        replaced by your correction as long as the caret is still at its end
+        (<kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes it).
+      </li>
+      <li>
+        <b>Analysis</b><span class="who">background, about a minute</span><br />
+        A <span class="dot bl"></span><b>blue dot</b> appears on the tray icon.
+        The text of that dictation, the server's record of it (draft, raw and
+        final text, timings) and your correction go to the configured analyzer
+        (Copilot CLI or an OpenAI-compatible model; the recording stays on this
+        PC), which classifies the problem and proposes only safe changes: add a
+        hotword, add a replacement rule, adjust a streaming parameter. Problems
+        that need code changes go to a backlog. Replacement rules are first
+        tried against your dictation history so you can see how many past
+        dictations they would touch.
+      </li>
+      <li>
+        <b>Your review</b><span class="who">you, whenever convenient</span
+        ><br />
+        When the analysis is done the dot turns <span class="dot o"></span
+        ><b>orange</b>. There is no hurry: it stays until you look. Click the
+        tray icon to open the suggestions; each one explains why, and confident
+        ones are preselected. Choose "Apply selected", "Reject all" or "Later".
+      </li>
+      <li>
+        <b>Takes effect</b><span class="who">background, seconds</span><br />
+        Accepted changes are written to the server's lexicon (the previous
+        version is backed up on the server and locally). The server reloads it,
+        so the <b>next dictation already uses it</b>; nothing needs restarting.
+      </li>
+      <li>
+        <b>Automatic check</b><span class="who">background</span><br />
+        The reported recording is transcribed again with the new lexicon and
+        compared with your correction.
+        <b>Better or unchanged: no message at all.</b> Only when it got worse,
+        or the check failed, does the orange dot come back; click the icon to
+        read the notice.
+      </li>
+    </ol>
+
+    <h2>Tray icon</h2>
+    <table>
+      <tr>
+        <th>Icon</th>
+        <th>Meaning</th>
+        <th>Click</th>
+      </tr>
+      <tr>
+        <td>Plain icon</td>
+        <td>Nothing waiting</td>
+        <td>Opens Handy Remote</td>
+      </tr>
+      <tr>
+        <td><span class="dot bl"></span> Blue dot</td>
+        <td>A report is being analysed</td>
+        <td>Opens Handy Remote (the dot changes by itself when done)</td>
+      </tr>
+      <tr>
+        <td><span class="dot o"></span> Orange dot</td>
+        <td>Suggestions to review, or a notice</td>
+        <td>Opens the review window / the notice</td>
+      </tr>
+    </table>
+    <p>
+      The tray menu also has entries to review suggestions, report the last
+      dictation and open this guide.
+    </p>
+
+    <h2>What is worth reporting</h2>
+    <ul>
+      <li>
+        Names, product names and technical terms that keep coming out wrong: the
+        easiest to fix with hotwords or replacement rules.
+      </li>
+      <li>A word that is consistently replaced by a homophone.</li>
+      <li>
+        Clearly wrong punctuation: an extra comma, a missing sentence break.
+        These tune the splitting parameters or go to the backlog.
+      </li>
+      <li>
+        Missing words, swallowed words, high latency: the server record is
+        attached so the cause can be found.
+      </li>
+    </ul>
+    <p class="note">
+      A one-off error caused by mumbling is not worth a report. Keep one
+      sentence per report and only fix the wrong parts of it; the analysis is
+      more accurate that way.
+    </p>
+
+    <h2>Where the data lives</h2>
+    <ul>
+      <li>
+        Reports:
+        <code>%LOCALAPPDATA%\handy-remote\feedback\reports\</code> (recording,
+        your correction, the analysis and your decision), unless
+        <code>reports_dir</code> says otherwise.
+      </li>
+      <li>
+        Local lexicon backups: <code>...\feedback\lexicon-history\</code>; the
+        server keeps its own history too.
+      </li>
+      <li>
+        Backlog of code-change ideas: <code>...\feedback\backlog.md</code>.
+      </li>
+      <li>
+        Settings: <code>%APPDATA%\handy-remote\feedback.toml</code> (see
+        <code>feedback.example.toml</code>).
+      </li>
+    </ul>
+  </body>
+</html>

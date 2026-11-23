@@ -7,6 +7,7 @@ import {
 } from "@/bindings";
 import type { ModelOption } from "./types";
 import type { DropdownOption } from "../../ui/Dropdown";
+import { isUserEndpoint } from "./EndpointConfig";
 
 type PostProcessProviderState = {
   providerOptions: DropdownOption[];
@@ -111,7 +112,7 @@ export const usePostProcessProviderState = (): PostProcessProviderState => {
         const hasBaseUrl = (provider?.base_url ?? "").trim() !== "";
         const hasApiKey = apiKey.trim() !== "";
 
-        if (provider?.id === "custom" ? hasBaseUrl : hasApiKey) {
+        if (provider?.allow_base_url_edit ? hasBaseUrl : hasApiKey) {
           void fetchPostProcessModels(providerId);
         }
       }
@@ -127,7 +128,7 @@ export const usePostProcessProviderState = (): PostProcessProviderState => {
 
   const handleBaseUrlChange = useCallback(
     (value: string) => {
-      if (!selectedProvider || selectedProvider.id !== "custom") {
+      if (!selectedProvider || !selectedProvider.allow_base_url_edit) {
         return;
       }
       const trimmed = value.trim();
@@ -226,7 +227,7 @@ export const usePostProcessProviderState = (): PostProcessProviderState => {
     `post_process_models_fetch:${selectedProviderId}`,
   );
 
-  const isCustomProvider = selectedProvider?.id === "custom";
+  const isCustomProvider = isUserEndpoint(selectedProvider?.id);
 
   // No automatic fetching - user must click refresh button
 
