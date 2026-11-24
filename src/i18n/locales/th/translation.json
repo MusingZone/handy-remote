@@ -10,7 +10,13 @@
     "secureInputWarning": "⚠ ปุ่มลัดถูกบล็อกโดย Secure Input",
     "language": "ภาษา",
     "autoLanguage": "อัตโนมัติ",
-    "otherLanguages": "ภาษาอื่น"
+    "otherLanguages": "ภาษาอื่น",
+    "voiceReview": "● Review suggestions ({count} waiting)",
+    "voiceAnalyzing": "Analysing your feedback…",
+    "voiceNoPending": "No suggestions waiting",
+    "voiceTooltipPending": "{count} dictation suggestions waiting (click the icon)",
+    "voiceReport": "Report the last dictation…",
+    "voiceGuide": "Dictation feedback guide"
   },
   "sidebar": {
     "general": "ทั่วไป",
@@ -19,7 +25,9 @@
     "postProcessing": "การปรับแต่งข้อความ",
     "history": "ประวัติ",
     "debug": "ดีบัก",
-    "about": "เกี่ยวกับ"
+    "about": "เกี่ยวกับ",
+    "remote": "Remote",
+    "cloud": "Cloud"
   },
   "onboarding": {
     "customModelDescription": "ไม่รองรับอย่างเป็นทางการ",
@@ -148,7 +156,8 @@
       "downloadInstead": "ดาวน์โหลด {{size}} แทน",
       "pauses": "{{name}} หยุดชั่วคราวที่ {{percent}}%",
       "resumeLater": "เลือกอีกครั้งเพื่อดาวน์โหลดต่อจากจุดเดิม",
-      "hint": "จะดาวน์โหลดต่อระหว่างที่คุณตั้งค่าให้เสร็จ"
+      "hint": "จะดาวน์โหลดต่อระหว่างที่คุณตั้งค่าให้เสร็จ",
+      "useServer": "I have a Handy Remote server"
     },
     "demo": {
       "title": "พูดในแอปไหนก็ได้ด้วยปุ่มลัดเดียว",
@@ -666,6 +675,20 @@
           "placeholderWithOptions": "ค้นหาหรือเลือกโมเดล",
           "placeholderNoOptions": "พิมพ์ชื่อโมเดล",
           "refreshModels": "รีเฟรชรายการโมเดล"
+        },
+        "endpoint": {
+          "import": "Import endpoints",
+          "imported": "Imported {{count}} endpoints",
+          "importFailed": "Could not import endpoints",
+          "auth": "Authentication",
+          "authDescription": "Send only the selected authentication header. Automatic uses Bearer for OpenAI and x-api-key for Anthropic.",
+          "authFailed": "Could not save authentication",
+          "authOptions": {
+            "auto": "Automatic",
+            "bearer": "Bearer token",
+            "api_key": "api-key header",
+            "none": "None"
+          }
         }
       },
       "prompts": {
@@ -688,6 +711,38 @@
         "cancel": "ยกเลิก",
         "selectToEdit": "เลือกพรอมต์ด้านบนเพื่อดูและแก้ไขรายละเอียด",
         "createFirst": "คลิก “สร้างพรอมต์ใหม่” ด้านบนเพื่อสร้างพรอมต์แรกของคุณสำหรับการปรับแต่งข้อความ"
+      },
+      "refine": {
+        "title": "Refine with a language model",
+        "always": {
+          "label": "Refine every dictation",
+          "description": "Send every dictation through the model and prompt above before it is pasted, not only the post-processing shortcut. Live pasting while you speak is turned off, and pasting waits for the model."
+        },
+        "detect": {
+          "label": "Local models",
+          "description": "Find language model servers running on this computer (Ollama, LM Studio, llama.cpp, Foundry Local, OpenVINO Model Server, Lemonade) and the Copilot bridge. Text stays on this computer, except through the Copilot bridge, which passes it to GitHub Copilot.",
+          "button": "Find local models",
+          "running": "Searching…",
+          "none": "No local model server answered. Start one (for example Ollama with a small instruct model such as qwen2.5:3b) and search again.",
+          "recommended": "recommended",
+          "use": "Use"
+        },
+        "benchmark": {
+          "label": "Speed test",
+          "description": "Run the selected provider, model and prompt on a sample dictation (one warm-up, then three timed runs) and show the result.",
+          "button": "Run speed test",
+          "running": "Testing…",
+          "result": "{{model}}: median {{ms}} ms ({{runs}} ms)"
+        },
+        "rules": {
+          "label": "My rules",
+          "description": "Your own instructions for the model, one per line, such as how to write floors, numbers or product names. They are added to the selected prompt for every dictation and take priority over its rules. Lines starting with # are comments. The file is read on every dictation, so you can also edit it in any editor or keep it in a synced folder. Your custom words are always kept exactly as written.",
+          "placeholder": "# One rule per line, for example:\nWrite floors as digits: 三楼 → 3楼\nAlways write \"Copilot\" with a capital C",
+          "save": "Save rules",
+          "saved": "Saved, {{count}} rules in use.",
+          "file": "Rules file",
+          "useFile": "Use this file"
+        }
       }
     },
     "history": {
@@ -898,6 +953,139 @@
           "details": "ระบบแปลงเสียงเป็นข้อความบนเครื่องของ Handy พัฒนาขึ้นบน transcribe.cpp และ ggml ขอขอบคุณผลงานอันยอดเยี่ยมจาก Georgi Gerganov และผู้ร่วมพัฒนาทุกคน"
         }
       }
+    },
+    "remote": {
+      "intro": "Run recognition on a Handy Remote server, for example a more powerful computer on your network, reached over SSH. While this is on, the local models are not used.",
+      "guide": "Setup guide",
+      "groups": {
+        "recognition": "Recognition",
+        "connection": "Connection",
+        "key": "Access key"
+      },
+      "enabled": {
+        "label": "Use remote server",
+        "description": "Send dictation to the server below instead of recognizing on this computer."
+      },
+      "incremental_paste": {
+        "label": "Paste while speaking",
+        "description": "Paste each finished sentence while you are still recording."
+      },
+      "rdp_caret": {
+        "label": "Follow the caret in Remote Desktop",
+        "description": "When a Remote Desktop window is in front, show the overlay under the caret of the app inside it. Needs the caret helper on the server."
+      },
+      "rdp_dictation": {
+        "label": "Dictate inside Remote Desktop",
+        "description": "With a Remote Desktop window in front, the dictation shortcut starts Handy inside the remote session, which records the redirected microphone and pastes there. Needs the caret helper on the server; otherwise dictates here."
+      },
+      "pairing": {
+        "label": "Pairing code",
+        "description": "Paste the code printed by \"doctor.py pair\" on the server to fill in the fields below.",
+        "apply": "Apply",
+        "applied": "Filled in from the pairing code. Test, then save.",
+        "invalid": "Not a valid pairing code: {{error}}"
+      },
+      "host": {
+        "label": "Server",
+        "description": "Host name or address of the server. Use localhost when the server runs on this computer."
+      },
+      "user": {
+        "label": "SSH user",
+        "description": "Account to sign in with on the server."
+      },
+      "ssh_port": {
+        "label": "SSH port",
+        "description": "SSH port of the server, usually 22."
+      },
+      "server_port": {
+        "label": "Server port",
+        "description": "Port the recognition server listens on, on the server itself."
+      },
+      "caret_port": {
+        "label": "Caret helper port",
+        "description": "Port of the caret helper on the server."
+      },
+      "identity_file": {
+        "label": "SSH key file",
+        "description": "Private key to sign in with. Empty uses this app's own key if it exists, otherwise your SSH defaults."
+      },
+      "ssh_path": {
+        "label": "ssh program",
+        "description": "Path to ssh. Empty detects it automatically.",
+        "missing": "ssh not found"
+      },
+      "host_key": {
+        "label": "Server key",
+        "description": "The server's SSH host key from the pairing code. When set, a server with a different key is refused.",
+        "none": "Not pinned",
+        "clear": "Clear"
+      },
+      "client_key": {
+        "label": "This computer's key",
+        "description": "Authorize this key once: run the command below in the server's folder.",
+        "none": "No key yet.",
+        "create": "Create key",
+        "copy": "Copy command",
+        "copied": "Copied"
+      },
+      "test": {
+        "button": "Test connection",
+        "running": "Testing…",
+        "connected": "Connected in {{connect}} ms; the server answered in {{roundTrip}} ms.",
+        "oldServer": "The server is an older version and reports no details.",
+        "loaded": "Models are loaded.",
+        "sleeping": "Models are unloaded; they load on the first dictation (a few seconds).",
+        "failed": "Connection failed: {{error}}"
+      },
+      "save": "Save",
+      "revert": "Revert",
+      "saved": "Saved.",
+      "automatic": "Automatic"
+    },
+    "cloudAsr": {
+      "intro": "Recognize speech with a public cloud speech-to-text service of your choice (OpenAI, Azure, Google, Deepgram, AssemblyAI, ElevenLabs, Groq, Mistral, Alibaba Qwen3-ASR, SiliconFlow, or any OpenAI-compatible server). Each recording is uploaded once when it ends; there is no live preview.",
+      "privacy": "Your audio leaves this computer and is processed under the provider's terms. API keys are stored only in this computer's settings.",
+      "saved": "Saved.",
+      "save": "Save",
+      "revert": "Revert",
+      "groups": {
+        "recognition": "Recognition",
+        "service": "Service"
+      },
+      "enabled": {
+        "label": "Use cloud recognition",
+        "description": "Send dictation to the service below instead of recognizing on this computer or a remote server."
+      },
+      "provider": {
+        "label": "Provider",
+        "description": "Endpoint, model and key are remembered per provider."
+      },
+      "base_url": {
+        "label": "Endpoint",
+        "description": "Leave empty for the default. Change it for another region, a proxy, or a compatible server."
+      },
+      "model": {
+        "label": "Model",
+        "description": "Leave empty for the default model."
+      },
+      "api_key": {
+        "label": "API key",
+        "description": "Required by this provider.",
+        "optional": "Optional: only if your server asks for one.",
+        "placeholder": "Paste the key",
+        "saved": "Saved (type to replace)",
+        "get": "Get a key"
+      },
+      "timeout": {
+        "label": "Timeout (s)",
+        "description": "Longest wait for one recognition, upload included."
+      },
+      "test": {
+        "button": "Test",
+        "running": "Sending a one-second test sound…",
+        "failed": "Test failed: {{error}}",
+        "ok": "Works: answered in {{ms}} ms (recognized: {{text}})."
+      }
     }
   },
   "footer": {
@@ -982,7 +1170,11 @@
   "overlay": {
     "transcribing": "กำลังถอดเสียง...",
     "processing": "กำลังประมวลผล...",
-    "loadingModel": "กำลังโหลดโมเดล..."
+    "loadingModel": "กำลังโหลดโมเดล...",
+    "remoteWaking": "Waking the server's models…",
+    "speakNow": "Speak now",
+    "refineOn": "Polishing this dictation · click to skip",
+    "refineOff": "Not polishing this dictation · click to polish"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} อาจกำลังบล็อกปุ่มลัด 1 รายการ",
