@@ -105,13 +105,24 @@ fork's releases on top of it.
 
 How `upstream-sync.yml` finishes a merge without a maintainer (`tools/ci/sync_merge.py`):
 
-- conflict hunks are resolved one by one by a [GitHub Models](https://docs.github.com/en/github-models)
-  chat model through the workflow's own token (repository variable `SYNC_AI_MODEL`, default
-  `openai/gpt-4.1`); lock files take upstream's version and are refreshed;
+- independent JSON object-key conflicts (such as upstream bumping `version` next to the fork's
+  `productName`, `identifier`, or updater keys in `src-tauri/tauri.conf.json`) are merged
+  deterministically while preserving the fork's identity/updater settings and taking upstream's
+  `version` in source (release builds override `version`);
+- all other conflict hunks are resolved one by one by an OpenAI-compatible chat model (repository
+  variable `SYNC_AI_MODEL`, default `openai/gpt-4.1`, and optional `SYNC_AI_ENDPOINT` + secret
+  `SYNC_AI_API_KEY`; the default endpoint `models.github.ai` was retired by GitHub on 2026-07-30,
+  so configure `SYNC_AI_ENDPOINT` and `SYNC_AI_API_KEY` for AI resolution of general conflicts).
+  Alternatively, a maintainer's local AI worker can resolve the reported conflict and submit the
+  sync pull request without sending local provider credentials to GitHub. That path must pass the
+  same full CI before merging and dispatching a stable release;
+  lock files take upstream's version and are refreshed;
 - keys that upstream locales lack (for example a new language) get the English text;
 - the merged result must pass the full `remote-ci.yml`, and the release workflow runs it again before
-  building. A conflict the model cannot resolve, or any failing check, opens an issue labelled
-  `upstream-conflict` and leaves `sync/<tag>` for a maintainer; nothing is released.
+  building. Any unresolved conflict, AI protocol/HTTP error, early merge/push/PR failure, or failing
+  check writes safe diagnostics (HTTP status, endpoint host/path, request ID, and conflicted files —
+  never tokens or source/response content) to the workflow summary, opens or updates an issue
+  labelled `upstream-conflict`, and visibly fails the workflow run; nothing is merged or released.
 
 Repository secrets (**Settings → Secrets and variables → Actions**):
 
@@ -120,6 +131,7 @@ Repository secrets (**Settings → Secrets and variables → Actions**):
 | `TAURI_SIGNING_PRIVATE_KEY`          | release                     | the minisign private key (`tauri signer generate`); its public key is `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`                                                                |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | release                     | that key's password                                                                                                                                                                          |
 | `SYNC_TOKEN`                         | upstream sync (recommended) | fine-grained token for this repository only: Contents, Pull requests and Workflows read/write. Without it, upstream releases that change `.github/workflows/` cannot be merged automatically |
+| `SYNC_AI_API_KEY`                    | upstream sync (optional)    | bearer API key for a custom OpenAI-compatible `SYNC_AI_ENDPOINT` (required whenever `SYNC_AI_ENDPOINT` is set; `GITHUB_TOKEN` is never sent to non-GitHub hosts)                             |
 | `SCRUB_PATTERNS`                     | CI (optional)               | regular expressions, one per line, for private names and hosts that must never be committed. The matches are reported by file and line only                                                  |
 
 A trial release: **Actions → remote release → Run workflow**, version `X.Y.Z-remote.N`
@@ -127,8 +139,10 @@ A trial release: **Actions → remote release → Run workflow**, version `X.Y.Z
 Installed copies only follow the latest full release. Verify downloaded checksums, the installer
 signature and tamper rejection, then install the trial explicitly.
 
-Releases made by hand are tried and approved before they become a full release. Releases made by
-upstream sync are full releases once every check passes.
+Custom feature work and releases made by hand still require trial verification and explicit approval
+outside `upstream-sync.yml` before becoming a full release. Upstream-only syncs follow the approved
+automated path: merge -> deterministic/AI conflict resolution when needed -> full CI -> automatic
+full release.
 
 Keep an offline copy of the signing key: without it, installed copies can no longer be updated.
 
