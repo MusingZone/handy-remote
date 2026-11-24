@@ -604,6 +604,9 @@ pub struct AppSettings {
     /// data folder (see `refine::user_rules`).
     #[serde(default)]
     pub refine_rules_file: String,
+    /// Fork: `custom_words` as of the last sync with the server lexicon (see `shared_words.rs`).
+    #[serde(default)]
+    pub custom_words_synced: Vec<String>,
 }
 
 fn empty_secret_map() -> SecretMap {
@@ -1141,6 +1144,7 @@ pub fn get_default_settings() -> AppSettings {
         post_process_always: false,
         refine_prompt_seeded: false,
         refine_rules_file: String::new(),
+        custom_words_synced: Vec::new(),
     }
 }
 

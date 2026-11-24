@@ -97,7 +97,12 @@ stays active. The feedback tool edits the same file ([FEEDBACK.md](FEEDBACK.md))
 }
 ```
 
-- `hotwords`: terms that bias Qwen3-ASR through its context prompt (Handy's own custom words are added).
+- `hotwords`: terms that bias Qwen3-ASR through its context prompt. This list is also Handy's
+  **custom words** list (Settings → Advanced): every client that uses the server syncs it both ways, at
+  startup, every 5 minutes, after each edit and when the settings page opens. A word added or removed
+  on one PC (or here, or by the feedback tool) reaches the others; edits made at the same time are
+  merged, not lost. Each write keeps the previous file in `<home>\config\lexicon-history`. With cloud
+  recognition or without a server the list stays on that PC.
 - `replacements`: regex fixes applied in order to recognized text (Python `re.sub`; case-sensitive
   unless the pattern starts with `(?i)`).
 - `stream`: overrides of the streaming parameters below.

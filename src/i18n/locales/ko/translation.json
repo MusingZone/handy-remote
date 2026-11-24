@@ -597,7 +597,13 @@
         "placeholder": "단어 추가",
         "add": "추가",
         "remove": "{{word}} 제거",
-        "duplicate": "\"{{word}}\"이(가) 이미 존재합니다"
+        "duplicate": "\"{{word}}\"이(가) 이미 존재합니다",
+        "shared": {
+          "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
+          "pending": "Syncing with the Handy Remote server?",
+          "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
+          "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
+        }
       },
       "voiceActivityDetection": {
         "title": "음성 활동 감지",

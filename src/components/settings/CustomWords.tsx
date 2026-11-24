@@ -1,5 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { listen } from "@tauri-apps/api/event";
+import { commands, type SharedWordsStatus } from "@/bindings";
 import { notify } from "@/stores/noticeStore";
 import { useSettings } from "../../hooks/useSettings";
 import { isComposingKeyEvent } from "../../lib/utils/keyboard";
@@ -25,10 +27,55 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
     const [newWord, setNewWord] = useState("");
     const customWords = getSetting("custom_words") || [];
     const normalizedWord = normalizeCustomWord(newWord);
+    const [shared, setShared] = useState<SharedWordsStatus | null>(null);
+
+    // Fork: the list is shared through the Handy Remote server; sync when the page opens.
+    useEffect(() => {
+      let active = true;
+      const unlisten = listen<SharedWordsStatus>(
+        "shared-words-status",
+        (event) => {
+          if (active) setShared(event.payload);
+        },
+      );
+      commands.sharedWordsStatus().then((s) => {
+        if (active) setShared(s);
+      });
+      commands.syncSharedWords().then((r) => {
+        if (active && r.status === "ok") setShared(r.data);
+      });
+      return () => {
+        active = false;
+        unlisten.then((fn) => fn());
+      };
+    }, []);
+
+    const sharedNote = (() => {
+      switch (shared?.state) {
+        case "synced":
+          return t("settings.advanced.customWords.shared.synced", {
+            count: shared.words,
+          });
+        case "pending":
+          return t("settings.advanced.customWords.shared.pending");
+        case "unsupported":
+          return t("settings.advanced.customWords.shared.unsupported");
+        case "failed":
+          return t("settings.advanced.customWords.shared.failed", {
+            error: shared.error ?? "",
+          });
+        default:
+          return null;
+      }
+    })();
 
     const handleAddWord = () => {
       if (normalizedWord && normalizedWord.length <= 50) {
-        if (customWords.includes(normalizedWord)) {
+        if (
+          customWords.some(
+            (w) => w.toLowerCase() === normalizedWord.toLowerCase(),
+          )
+        ) {
           notify({
             title: t("settings.advanced.customWords.duplicate", {
               word: normalizedWord,
@@ -89,6 +136,9 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
             </Button>
           </div>
         </SettingContainer>
+        {sharedNote && (
+          <p className="px-4 pb-2 text-xs text-ink-3">{sharedNote}</p>
+        )}
         {customWords.length > 0 && (
           <div
             className={`px-4 p-2 ${grouped ? "" : "rounded-lg border border-line"} flex flex-wrap gap-1`}

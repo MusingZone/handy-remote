@@ -599,24 +599,28 @@ def lexicon_put(data, base_sha256: str) -> dict:
         raise ValueError("lexicon must be an object with hotwords/replacements lists and a stream object")
     for r in data.get("replacements", []):
         re.compile(r["from"])
-    cur = lexicon_state()
-    if cur["sha256"] != (base_sha256 or ""):
-        raise ValueError("the lexicon changed on the server meanwhile; read it again")
-    os.makedirs(os.path.dirname(LEXICON), exist_ok=True)
-    if cur["sha256"]:
-        hist = os.path.join(os.path.dirname(LEXICON), "lexicon-history")
-        os.makedirs(hist, exist_ok=True)
-        shutil.copyfile(LEXICON, os.path.join(hist, f"lexicon-{dt.datetime.now():%Y%m%d-%H%M%S}.json"))
-        for old in sorted(os.listdir(hist))[:-50]:
-            os.remove(os.path.join(hist, old))
-    tmp = LEXICON + ".tmp"
-    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-        f.write("\n")
-    os.replace(tmp, LEXICON)
-    log.info("lexicon replaced by a client (%d hotwords, %d replacements)",
-             len(data.get("hotwords", [])), len(data.get("replacements", [])))
-    return lexicon_state()
+    with LEXICON_LOCK:
+        cur = lexicon_state()
+        if cur["sha256"] != (base_sha256 or ""):
+            raise ValueError("the lexicon changed on the server meanwhile; read it again")
+        os.makedirs(os.path.dirname(LEXICON), exist_ok=True)
+        if cur["sha256"]:
+            hist = os.path.join(os.path.dirname(LEXICON), "lexicon-history")
+            os.makedirs(hist, exist_ok=True)
+            shutil.copyfile(LEXICON, os.path.join(hist, f"lexicon-{dt.datetime.now():%Y%m%d-%H%M%S-%f}.json"))
+            for old in sorted(os.listdir(hist))[:-50]:
+                os.remove(os.path.join(hist, old))
+        tmp = LEXICON + ".tmp"
+        with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+        os.replace(tmp, LEXICON)
+        log.info("lexicon replaced by a client (%d hotwords, %d replacements)",
+                 len(data.get("hotwords", [])), len(data.get("replacements", [])))
+        return lexicon_state()
+
+
+LEXICON_LOCK = threading.Lock()
 
 
 class Pcm:

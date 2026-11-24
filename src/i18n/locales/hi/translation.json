@@ -597,7 +597,13 @@
         "placeholder": "शब्द जोड़ें",
         "add": "जोड़ें",
         "remove": "{{word}} हटाएं",
-        "duplicate": "\"{{word}}\" पहले से मौजूद है"
+        "duplicate": "\"{{word}}\" पहले से मौजूद है",
+        "shared": {
+          "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
+          "pending": "Syncing with the Handy Remote server?",
+          "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
+          "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
+        }
       },
       "voiceActivityDetection": {
         "title": "वॉइस एक्टिविटी डिटेक्शन",

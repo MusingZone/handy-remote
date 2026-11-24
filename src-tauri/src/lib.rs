@@ -31,6 +31,7 @@ pub mod refine;
 pub mod remote;
 mod secure_input;
 mod settings;
+mod shared_words;
 mod shortcut;
 mod signal_handle;
 mod system_languages;
@@ -715,6 +716,8 @@ pub fn run(cli_args: CliArgs) {
             remote::remote_test_connection,
             remote::remote_client_key,
             remote::remote_detect_ssh,
+            shared_words::shared_words_status,
+            shared_words::sync_shared_words,
             cloud_asr::cloud_asr_providers,
             cloud_asr::change_cloud_asr_settings,
             cloud_asr::cloud_asr_test,
@@ -1189,6 +1192,8 @@ pub fn run(cli_args: CliArgs) {
                     Err(e) => log::debug!("VAD preload at startup failed: {}", e),
                 }
             });
+
+            shared_words::start(&app_handle);
 
             // Hide tray icon if --no-tray was passed
             if cli_args.no_tray {

@@ -597,7 +597,13 @@
         "placeholder": "Woord toevoegen",
         "add": "Toevoegen",
         "remove": "{{word}} verwijderen",
-        "duplicate": "\"{{word}}\" bestaat al"
+        "duplicate": "\"{{word}}\" bestaat al",
+        "shared": {
+          "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
+          "pending": "Syncing with the Handy Remote server?",
+          "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
+          "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
+        }
       },
       "voiceActivityDetection": {
         "title": "Spraakactiviteitsdetectie (VAD)",

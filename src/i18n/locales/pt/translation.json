@@ -597,7 +597,13 @@
         "placeholder": "Adicionar uma palavra",
         "add": "Adicionar",
         "remove": "Remover {{word}}",
-        "duplicate": "\"{{word}}\" já existe"
+        "duplicate": "\"{{word}}\" já existe",
+        "shared": {
+          "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
+          "pending": "Syncing with the Handy Remote server?",
+          "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
+          "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
+        }
       },
       "voiceActivityDetection": {
         "title": "Detecção de atividade de voz",

@@ -36,7 +36,7 @@ The server speaks Handy's own worker protocol over TCP. Each frame is
 | `Hello`, `Load`                                  | Handshake and model load (waits for the models)                 |
 | `StreamBegin`, `Feed`, `Finalize`, `StreamReset` | Streaming dictation                                             |
 | `Run`                                            | One-shot transcription of a whole clip                          |
-| `AuditQuery`, `LexiconGet`, `LexiconPut`         | Used by the feedback tool; no shell access needed               |
+| `AuditQuery`, `LexiconGet`, `LexiconPut`         | Feedback tool and shared custom words; no shell access needed   |
 
 ## Recognition pipeline (server)
 
