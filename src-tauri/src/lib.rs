@@ -1175,6 +1175,21 @@ pub fn run(cli_args: CliArgs) {
                 let _ = crate::managers::transcription::get_available_accelerators(&tm);
             });
 
+            // Load the VAD now rather than on the first shortcut press. Its first
+            // load dlopens every ggml-cpu-*.dll variant to pick the best one;
+            // after an install or update, antivirus scans each new DLL then
+            // (Defender cloud lookups measured ~1 s per file), which otherwise
+            // kept the first recording's overlay waiting for 7-14 s.
+            let vad_app_handle = app_handle.clone();
+            std::thread::spawn(move || {
+                let started = std::time::Instant::now();
+                let rm = vad_app_handle.state::<Arc<AudioRecordingManager>>();
+                match rm.preload_vad() {
+                    Ok(()) => log::info!("VAD preloaded at startup in {:?}", started.elapsed()),
+                    Err(e) => log::debug!("VAD preload at startup failed: {}", e),
+                }
+            });
+
             // Hide tray icon if --no-tray was passed
             if cli_args.no_tray {
                 tray::set_tray_visibility(&app_handle, false);
