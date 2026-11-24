@@ -9,7 +9,7 @@ name: "upstream sync"
 # Any unresolved conflict, early merge/push/PR failure, or failing check opens (or updates) an issue
 # labelled upstream-conflict with safe diagnostics, writes a workflow summary, and fails the run.
 #
-# Secret SYNC_TOKEN (optional, recommended): a fine-grained token for this repository only with
+# Secret SYNC_TOKEN (optional, opt in with variable SYNC_USE_PAT=true): a fine-grained token for this repository only with
 # Contents, Pull requests and Workflows read/write. GITHUB_TOKEN cannot push or merge changes to
 # .github/workflows/, which upstream releases often contain.
 # Variable SYNC_AI_MODEL (optional): chat model id, default openai/gpt-4.1.
@@ -73,7 +73,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ secrets.SYNC_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ vars.SYNC_USE_PAT == 'true' && secrets.SYNC_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Find a newer upstream release
         id: find
@@ -328,7 +328,7 @@ jobs:
       - name: Merge the pull request
         id: merged
         env:
-          GH_TOKEN: ${{ secrets.SYNC_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ vars.SYNC_USE_PAT == 'true' && secrets.SYNC_TOKEN || secrets.GITHUB_TOKEN }}
           PR: ${{ needs.merge.outputs.pr }}
         run: |
           gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --merge --delete-branch || {
