@@ -376,7 +376,7 @@ class ModelsClientTest(unittest.TestCase):
             # General conflict with missing token fails and writes safe diagnostic
             rust_file = root / "lib.rs"
             rust_file.write_text(CONFLICTED, encoding="utf-8")
-            with mock.patch.dict(os.environ, {}, clear=True):
+            with mock.patch.dict(os.environ, {}, clear=True), mock.patch("builtins.print"):
                 rc = sync.main(["resolve", "--diagnostics-file", str(diag), str(rust_file)])
             self.assertEqual(rc, 1)
             diag_text = diag.read_text(encoding="utf-8")

@@ -105,6 +105,12 @@ fork's releases on top of it.
 
 How `upstream-sync.yml` finishes a merge without a maintainer (`tools/ci/sync_merge.py`):
 
+By default, repository writes use the short-lived `GITHUB_TOKEN`. Enable Actions' permission to
+create pull requests in the repository settings. To opt into a separately maintained fine-grained
+`SYNC_TOKEN` (needed for workflow-file changes), also set repository variable `SYNC_USE_PAT=true`;
+an old token left behind after re-creating a repository is not used implicitly. A local maintainer
+or rescue worker can handle workflow changes when this opt-in token is not configured.
+
 - independent JSON object-key conflicts (such as upstream bumping `version` next to the fork's
   `productName`, `identifier`, or updater keys in `src-tauri/tauri.conf.json`) are merged
   deterministically while preserving the fork's identity/updater settings and taking upstream's
