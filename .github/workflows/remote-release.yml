@@ -187,7 +187,7 @@ jobs:
           PRERELEASE: ${{ inputs.prerelease }}
         run: |
           $assets = Get-ChildItem dist-release -File | Where-Object Name -ne 'release-notes.md' | ForEach-Object FullName
-          $flags = if ($env:PRERELEASE -eq 'false') { @('--latest') } else { @('--prerelease', '--latest=false') }
+          [string[]]$flags = if ($env:PRERELEASE -eq 'false') { @('--latest') } else { @('--prerelease', '--latest=false') }
           gh release create "v$env:VERSION" @assets --repo $env:GITHUB_REPOSITORY --target (git rev-parse HEAD) `
             --title "Handy Remote $env:VERSION" --notes-file dist-release/release-notes.md @flags
           if ($LASTEXITCODE -ne 0) { throw "gh release create failed" }
