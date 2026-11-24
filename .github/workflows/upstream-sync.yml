@@ -2,16 +2,20 @@ name: "upstream sync"
 # Every 6 hours: when cjpais/Handy has a release newer than .upstream-version, merge it on branch
 # sync/<tag>, run the fork's checks, merge the pull request and start remote-release.yml (a full
 # release, which installed copies update to).
-# Conflicts are resolved hunk by hunk with a GitHub Models chat model (tools/ci/sync_merge.py);
+# Conflicts are resolved hunk by hunk (tools/ci/sync_merge.py): independent JSON object-key
+# conflicts are merged deterministically, and remaining hunks use an OpenAI-compatible chat model;
 # lock files take upstream's version and are refreshed; upstream locales missing the fork's strings
 # get the English text. Nothing is merged or released unless the fork's full CI passes on the result.
-# A conflict the model cannot resolve, or failing checks, opens (or updates) an issue labelled
-# upstream-conflict and leaves sync/<tag> for a maintainer.
+# Any unresolved conflict, early merge/push/PR failure, or failing check opens (or updates) an issue
+# labelled upstream-conflict with safe diagnostics, writes a workflow summary, and fails the run.
 #
 # Secret SYNC_TOKEN (optional, recommended): a fine-grained token for this repository only with
 # Contents, Pull requests and Workflows read/write. GITHUB_TOKEN cannot push or merge changes to
 # .github/workflows/, which upstream releases often contain.
-# Variable SYNC_AI_MODEL (optional): GitHub Models model id, default openai/gpt-4.1.
+# Variable SYNC_AI_MODEL (optional): chat model id, default openai/gpt-4.1.
+# Variable SYNC_AI_ENDPOINT (optional): OpenAI-compatible chat completions URL (default GitHub
+# Models; GitHub Models was retired on 2026-07-30, so set SYNC_AI_ENDPOINT + secret SYNC_AI_API_KEY
+# to enable AI conflict resolution with an active provider).
 on:
   schedule:
     - cron: "17 */6 * * *"
@@ -108,6 +112,8 @@ jobs:
           TAG: ${{ steps.find.outputs.tag }}
           BRANCH: ${{ steps.find.outputs.branch }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SYNC_AI_API_KEY: ${{ secrets.SYNC_AI_API_KEY }}
+          SYNC_AI_ENDPOINT: ${{ vars.SYNC_AI_ENDPOINT }}
           SYNC_AI_MODEL: ${{ vars.SYNC_AI_MODEL }}
         run: |
           set -uo pipefail
@@ -115,99 +121,112 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # Use the fork's helper even if the merge conflicts in it.
           cp tools/ci/sync_merge.py "$RUNNER_TEMP/sync_merge.py"
-          git fetch --no-tags "https://github.com/$UPSTREAM.git" "refs/tags/$TAG:refs/tags/$TAG"
-          git checkout -B "$BRANCH"
-          locks='(^|/)(Cargo\.lock|bun\.lockb?|package-lock\.json)$'
           : > "$RUNNER_TEMP/ai-files.txt"
           : > "$RUNNER_TEMP/lock-files.txt"
+          : > "$RUNNER_TEMP/conflicts.txt"
+          : > "$RUNNER_TEMP/merge.log"
+          : > "$RUNNER_TEMP/resolve-diagnostics.txt"
+          : > "$RUNNER_TEMP/failure-reason.txt"
+          if ! git fetch --no-tags "https://github.com/$UPSTREAM.git" "refs/tags/$TAG:refs/tags/$TAG"; then
+            echo "Fetching upstream tag $TAG failed." > "$RUNNER_TEMP/failure-reason.txt"
+            echo "::error::failed to fetch upstream tag $TAG"
+            exit 1
+          fi
+          if ! git checkout -B "$BRANCH"; then
+            echo "Creating local sync branch $BRANCH failed." > "$RUNNER_TEMP/failure-reason.txt"
+            echo "::error::failed to create local branch $BRANCH"
+            exit 1
+          fi
+          locks='(^|/)(Cargo\.lock|bun\.lockb?|package-lock\.json)$'
           if ! git -c merge.conflictStyle=diff3 merge --no-ff --no-edit -m "upstream: merge $TAG" "$TAG" > "$RUNNER_TEMP/merge.log" 2>&1; then
             cat "$RUNNER_TEMP/merge.log"
             git diff --name-only --diff-filter=U > "$RUNNER_TEMP/conflicts.txt"
+            if [ ! -s "$RUNNER_TEMP/conflicts.txt" ]; then
+              git merge --abort 2>/dev/null || true
+              echo "git merge failed before producing conflict markers." > "$RUNNER_TEMP/failure-reason.txt"
+              echo "::error::git merge failed without conflicted file list"
+              exit 1
+            fi
             grep -E "$locks" "$RUNNER_TEMP/conflicts.txt" > "$RUNNER_TEMP/lock-files.txt" || true
             grep -vE "$locks" "$RUNNER_TEMP/conflicts.txt" > "$RUNNER_TEMP/ai-files.txt" || true
-            while read -r file; do git checkout --theirs -- "$file" && git add -- "$file"; done < "$RUNNER_TEMP/lock-files.txt"
+            while read -r file; do
+              [ -n "$file" ] || continue
+              if ! git checkout --theirs -- "$file" || ! git add -- "$file"; then
+                git merge --abort 2>/dev/null || true
+                echo "Taking upstream lock file $file failed." > "$RUNNER_TEMP/failure-reason.txt"
+                echo "::error::failed to take upstream lock file $file"
+                exit 1
+              fi
+            done < "$RUNNER_TEMP/lock-files.txt"
             mapfile -t files < "$RUNNER_TEMP/ai-files.txt"
-            if [ "${#files[@]}" -eq 0 ] || python3 "$RUNNER_TEMP/sync_merge.py" resolve "${files[@]}"; then
+            if [ "${#files[@]}" -eq 0 ] || python3 "$RUNNER_TEMP/sync_merge.py" resolve --diagnostics-file "$RUNNER_TEMP/resolve-diagnostics.txt" "${files[@]}"; then
               [ "${#files[@]}" -eq 0 ] || git add -- "${files[@]}"
             fi
             if [ -n "$(git diff --name-only --diff-filter=U)" ] || ! git commit --no-edit -q; then
-              git merge --abort
-              echo "conflict=true" >> "$GITHUB_OUTPUT"
-              exit 0
+              git merge --abort 2>/dev/null || true
+              echo "Upstream $TAG does not merge cleanly into \`main\`, and automatic conflict resolution did not succeed." > "$RUNNER_TEMP/failure-reason.txt"
+              echo "::error::automatic conflict resolution failed for upstream $TAG"
+              exit 1
             fi
           fi
           echo "$TAG" > .upstream-version
-          python3 "$RUNNER_TEMP/sync_merge.py" locales > "$RUNNER_TEMP/locales.txt" || exit 1
+          if ! python3 "$RUNNER_TEMP/sync_merge.py" locales > "$RUNNER_TEMP/locales.txt"; then
+            echo "Filling missing locale fallback strings failed." > "$RUNNER_TEMP/failure-reason.txt"
+            echo "::error::locale fallback update failed"
+            exit 1
+          fi
           cat "$RUNNER_TEMP/locales.txt"
           if grep -q 'Cargo.lock' "$RUNNER_TEMP/lock-files.txt"; then
-            (cd src-tauri && cargo metadata --format-version 1 > /dev/null) || exit 1
+            if ! (cd src-tauri && cargo metadata --format-version 1 > /dev/null); then
+              echo "Refreshing Cargo.lock metadata failed." > "$RUNNER_TEMP/failure-reason.txt"
+              echo "::error::cargo metadata failed after lock file merge"
+              exit 1
+            fi
           fi
           if grep -q 'bun.lock' "$RUNNER_TEMP/lock-files.txt"; then
-            bun install --ignore-scripts || exit 1
+            if ! bun install --ignore-scripts; then
+              echo "Refreshing bun.lock failed." > "$RUNNER_TEMP/failure-reason.txt"
+              echo "::error::bun install --ignore-scripts failed after lock file merge"
+              exit 1
+            fi
           fi
-          git add -A
-          git commit -q -m "upstream: track $TAG" || exit 1
-          echo "conflict=false" >> "$GITHUB_OUTPUT"
-
-      - name: Report a merge conflict
-        if: steps.git.outputs.conflict == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.find.outputs.tag }}
-        run: |
-          set -euo pipefail
-          gh label create upstream-conflict --color B60205 --description "Upstream release needs a manual merge" 2>/dev/null || true
-          {
-            echo "Upstream [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG) does not merge cleanly into \`main\`, and the automatic resolution did not succeed."
-            echo
-            echo "Conflicted files:"
-            echo
-            while read -r file; do echo "- \`$file\`"; done < "$RUNNER_TEMP/conflicts.txt"
-            echo
-            echo "<details><summary>git merge output</summary>"
-            echo
-            echo "~~~"
-            tail -n 100 "$RUNNER_TEMP/merge.log"
-            echo "~~~"
-            echo "</details>"
-            echo
-            echo "Resolve on branch \`sync/$TAG\` (merge \`$TAG\`, set \`.upstream-version\`), open a pull request,"
-            echo "and run **remote release** after it is merged. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          } > "$RUNNER_TEMP/issue.md"
-          title="Upstream $TAG needs a manual merge"
-          existing=$(gh issue list --state open --label upstream-conflict --search "$TAG in:title" --json number -q '.[0].number')
-          if [ -n "$existing" ]; then
-            gh issue comment "$existing" --body-file "$RUNNER_TEMP/issue.md"
-          else
-            gh issue create --title "$title" --label upstream-conflict --body-file "$RUNNER_TEMP/issue.md"
+          if ! git add -A || ! git commit -q -m "upstream: track $TAG"; then
+            echo "Committing upstream tracking metadata for $TAG failed." > "$RUNNER_TEMP/failure-reason.txt"
+            echo "::error::failed to commit upstream tracking metadata"
+            exit 1
           fi
 
       # The fork's CI scans history from the upstream tag, so the tag must exist in this repository.
       - name: Push the upstream tag and the sync branch
-        if: steps.git.outputs.conflict == 'false'
+        if: steps.find.outputs.tag
         env:
           TAG: ${{ steps.find.outputs.tag }}
           BRANCH: ${{ steps.find.outputs.branch }}
         run: |
           if ! git push origin "refs/tags/$TAG" || ! git push --force origin "$BRANCH"; then
+            echo "Pushing upstream tag \`$TAG\` or branch \`$BRANCH\` was refused. If upstream changed \`.github/workflows/\`, verify the \`SYNC_TOKEN\` secret (Contents, Pull requests, and Workflows read/write)." > "$RUNNER_TEMP/failure-reason.txt"
             echo "::error::push refused. If upstream changed .github/workflows, set the SYNC_TOKEN secret (see the header of upstream-sync.yml)."
             exit 1
           fi
 
       - name: Open the pull request
         id: pr
-        if: steps.git.outputs.conflict == 'false'
+        if: steps.find.outputs.tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.find.outputs.tag }}
           BRANCH: ${{ steps.find.outputs.branch }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           {
             echo "Merges upstream [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG). Checks: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID; the pull request is merged and released when they pass."
-            if [ -s "$RUNNER_TEMP/ai-files.txt" ]; then
+            if [ -s "$RUNNER_TEMP/resolve-diagnostics.txt" ]; then
               echo
-              echo "Conflicts resolved by the model (review recommended):"
+              echo "Conflicts resolved automatically (review recommended):"
+              cat "$RUNNER_TEMP/resolve-diagnostics.txt"
+            elif [ -s "$RUNNER_TEMP/ai-files.txt" ]; then
+              echo
+              echo "Conflicts resolved automatically (review recommended):"
               while read -r file; do echo "- \`$file\`"; done < "$RUNNER_TEMP/ai-files.txt"
             fi
             if [ -s "$RUNNER_TEMP/lock-files.txt" ]; then
@@ -221,14 +240,76 @@ jobs:
               sed 's/^/- /' "$RUNNER_TEMP/locales.txt"
             fi
           } > "$RUNNER_TEMP/pr.md"
-          number=$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number')
+          number=$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number') || {
+            echo "Listing existing pull requests for \`$BRANCH\` failed." > "$RUNNER_TEMP/failure-reason.txt"
+            exit 1
+          }
           if [ -z "$number" ]; then
-            gh pr create --base main --head "$BRANCH" --title "Merge upstream $TAG" --body-file "$RUNNER_TEMP/pr.md"
-            number=$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number')
+            gh pr create --base main --head "$BRANCH" --title "Merge upstream $TAG" --body-file "$RUNNER_TEMP/pr.md" || {
+              echo "Opening pull request for \`$BRANCH\` failed." > "$RUNNER_TEMP/failure-reason.txt"
+              exit 1
+            }
+            number=$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number') || {
+              echo "Reading pull request number for \`$BRANCH\` failed." > "$RUNNER_TEMP/failure-reason.txt"
+              exit 1
+            }
           else
-            gh pr edit "$number" --body-file "$RUNNER_TEMP/pr.md"
+            gh pr edit "$number" --body-file "$RUNNER_TEMP/pr.md" || {
+              echo "Updating pull request #$number for \`$BRANCH\` failed." > "$RUNNER_TEMP/failure-reason.txt"
+              exit 1
+            }
           fi
           echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - name: Report sync failure
+        if: failure() && steps.find.outputs.tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.find.outputs.tag }}
+        run: |
+          set -uo pipefail
+          reason=$(cat "$RUNNER_TEMP/failure-reason.txt" 2>/dev/null || true)
+          if [ -z "$reason" ]; then
+            reason="Automatic upstream sync for [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG) failed during merge setup."
+          fi
+          {
+            echo "### Upstream sync failed for $TAG"
+            echo
+            echo "$reason"
+            if [ -s "$RUNNER_TEMP/conflicts.txt" ]; then
+              echo
+              echo "Conflicted files:"
+              echo
+              while read -r file; do [ -n "$file" ] && echo "- \`$file\`"; done < "$RUNNER_TEMP/conflicts.txt"
+            fi
+            if [ -s "$RUNNER_TEMP/resolve-diagnostics.txt" ]; then
+              echo
+              echo "Resolver diagnostics (safe metadata only):"
+              echo
+              cat "$RUNNER_TEMP/resolve-diagnostics.txt"
+            fi
+            if [ -s "$RUNNER_TEMP/merge.log" ]; then
+              echo
+              echo "<details><summary>git merge output</summary>"
+              echo
+              echo "~~~"
+              tail -n 100 "$RUNNER_TEMP/merge.log"
+              echo "~~~"
+              echo "</details>"
+            fi
+            echo
+            echo "Next steps: resolve on branch \`sync/$TAG\` (merge \`$TAG\`, set \`.upstream-version\`), open a pull request, and run **remote release** after it is merged (or fix the sync configuration and re-run **upstream sync**)."
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } > "$RUNNER_TEMP/issue.md"
+          cat "$RUNNER_TEMP/issue.md" >> "$GITHUB_STEP_SUMMARY"
+          gh label create upstream-conflict --color B60205 --description "Upstream release needs a manual merge" 2>/dev/null || true
+          title="Upstream $TAG needs a manual merge"
+          existing=$(gh issue list --state open --label upstream-conflict --search "$TAG in:title" --json number -q '.[0].number' 2>/dev/null || true)
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file "$RUNNER_TEMP/issue.md" || echo "::warning::could not comment on issue #$existing (check repository Issues settings)"
+          else
+            gh issue create --title "$title" --label upstream-conflict --body-file "$RUNNER_TEMP/issue.md" || echo "::warning::could not create upstream-conflict issue (check repository Issues settings)"
+          fi
 
   checks:
     needs: merge
@@ -310,6 +391,7 @@ jobs:
           gh label create upstream-conflict --color B60205 --description "Upstream release needs a manual merge" --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
           if [ "$CHECKS" = "failure" ]; then what="the fork's checks failed on the merged result"; else what="merging the pull request or starting the release failed"; fi
           body="Upstream $TAG merged into pull request #$PR, but $what, so nothing was released. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          printf '### Upstream sync failed for %s\n\n%s\n' "$TAG" "$body" >> "$GITHUB_STEP_SUMMARY"
           existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label upstream-conflict --search "$TAG in:title" --json number -q '.[0].number')
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
