@@ -103,6 +103,9 @@ fork's releases on top of it.
 | `remote-release.yml` | by hand, or by upstream sync    | first runs CI on the selected ref, then builds, signs, audits and publishes; by hand a **prerelease** by default, from upstream sync a full (latest) release  |
 | `upstream-sync.yml`  | every 6 hours, or by hand       | merges a newer upstream release on `sync/<tag>`, runs CI, merges the pull request and starts the release; keeps upstream workflows disabled                   |
 
+The release publisher keeps its native CLI flags in a typed string array: PowerShell otherwise
+splats the stable-only single `--latest` string character by character, unlike the two-flag trial path.
+
 How `upstream-sync.yml` finishes a merge without a maintainer (`tools/ci/sync_merge.py`):
 
 By default, repository writes use the short-lived `GITHUB_TOKEN`. Enable Actions' permission to
