@@ -259,6 +259,7 @@ unsafe fn range_rect(r: &IUIAutomationTextRange, right_edge: bool) -> Option<Car
 
 const RDP_CLASS: &str = "TscShellContainerClass";
 const TUNNEL_RETRY: Duration = Duration::from_secs(20);
+const TUNNEL_CHECK: Duration = Duration::from_secs(10);
 
 struct Tunnel {
     child: Child,
@@ -369,7 +370,21 @@ fn remote_query() -> Option<RemoteCaret> {
 }
 
 /// One request line on the persistent tunnel, opening it first when needed; returns the reply line.
+/// A tunnel that was already open can die with the network (sleep, VPN or Wi-Fi change) without
+/// anyone noticing; it is then reopened at once rather than losing this request to the back-off.
 fn tunnel_request(guard: &mut Option<Tunnel>, request: &[u8]) -> Option<String> {
+    let reused = guard.is_some();
+    let line = tunnel_request_once(guard, request);
+    if line.is_some() || !reused {
+        return line;
+    }
+    if let Ok(mut r) = TUNNEL_RETRY_AT.lock() {
+        *r = None;
+    }
+    tunnel_request_once(guard, request)
+}
+
+fn tunnel_request_once(guard: &mut Option<Tunnel>, request: &[u8]) -> Option<String> {
     if guard.is_none() {
         let waiting = TUNNEL_RETRY_AT
             .lock()
@@ -468,24 +483,30 @@ fn forward_to_remote_desktop(request: &[u8], key: &str) -> Option<(bool, String)
 }
 
 /// Opens the tunnel while a Remote Desktop window is in front, so the first dictation there already
-/// lands under the remote caret.
+/// lands under the remote caret, and checks an open one every 10 s so a tunnel that died meanwhile
+/// (laptop sleep, network change) is replaced before the next key press rather than on it.
 pub fn start_remote_prewarm() {
     if !enabled() {
         return;
     }
     let _ = std::thread::Builder::new()
         .name("remote-caret".into())
-        .spawn(|| loop {
-            std::thread::sleep(Duration::from_secs(2));
-            let rdp = unsafe {
-                let fg = GetForegroundWindow();
-                !fg.is_invalid() && is_remote_desktop(fg)
-            };
-            if rdp
-                && TUNNEL.lock().map(|t| t.is_none()).unwrap_or(false)
-                && crate::remote::caret_spec().is_some()
-            {
-                let _ = remote_query();
+        .spawn(|| {
+            let mut last_check = Instant::now();
+            loop {
+                std::thread::sleep(Duration::from_secs(2));
+                let rdp = unsafe {
+                    let fg = GetForegroundWindow();
+                    !fg.is_invalid() && is_remote_desktop(fg)
+                };
+                if !rdp || crate::remote::caret_spec().is_none() {
+                    continue;
+                }
+                let open = TUNNEL.lock().map(|t| t.is_some()).unwrap_or(true);
+                if !open || last_check.elapsed() >= TUNNEL_CHECK {
+                    last_check = Instant::now();
+                    let _ = remote_query();
+                }
             }
         });
 }
