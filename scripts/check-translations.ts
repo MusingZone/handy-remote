@@ -14,6 +14,7 @@ interface ValidationResult {
   valid: boolean;
   missing: string[][];
   extra: string[][];
+  issues: string[];
 }
 
 function getLanguages(): string[] {
@@ -76,11 +77,89 @@ function hasKeyPath(obj: TranslationData, keyPath: string[]): boolean {
   return true;
 }
 
+function getNestedValue(obj: TranslationData, keyPath: string[]): unknown {
+  let current: unknown = obj;
+  for (const key of keyPath) {
+    if (typeof current !== "object" || current === null) {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
+
+const SHARED_CUSTOM_WORDS_KEYS = [
+  "synced",
+  "pending",
+  "unsupported",
+  "failed",
+] as const;
+
+const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g;
+const CJK_RE = /[\u4e00-\u9fff]/;
+
+function extractPlaceholders(text: string): string[] {
+  return (text.match(PLACEHOLDER_RE) ?? []).slice().sort();
+}
+
+// Fork: guard settings.advanced.customWords.shared against ANSI '?' encoding
+// corruption (e.g. CJK -> '???' or '…' -> '?') and placeholder drift without
+// forbidding legitimate question marks in other translation keys.
+function checkSharedCustomWords(
+  lang: string,
+  data: TranslationData,
+  referenceData: TranslationData,
+): string[] {
+  const issues: string[] = [];
+  for (const key of SHARED_CUSTOM_WORDS_KEYS) {
+    const keyPath = ["settings", "advanced", "customWords", "shared", key];
+    const label = keyPath.join(".");
+    const value = getNestedValue(data, keyPath);
+    const refValue = getNestedValue(referenceData, keyPath);
+    if (typeof value !== "string" || value.trim().length === 0) {
+      issues.push(`${label}: expected a non-empty string`);
+      continue;
+    }
+    if (value.includes("?") || value.includes("\uFFFD")) {
+      issues.push(
+        `${label}: contains corrupted '?' or replacement character (${JSON.stringify(value)})`,
+      );
+    }
+    if (key === "pending" && !value.endsWith("\u2026")) {
+      issues.push(
+        `${label}: must end with Unicode ellipsis '…' (${JSON.stringify(value)})`,
+      );
+    }
+    if ((lang === "zh" || lang === "zh-TW") && !CJK_RE.test(value)) {
+      issues.push(`${label}: expected CJK characters for ${lang}`);
+    }
+    if (typeof refValue === "string") {
+      const expected = extractPlaceholders(refValue);
+      const actual = extractPlaceholders(value);
+      if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+        issues.push(
+          `${label}: placeholder mismatch (expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)})`,
+        );
+      }
+    }
+  }
+  return issues;
+}
+
 function loadTranslationFile(lang: string): TranslationData | null {
   const filePath = path.join(LOCALES_DIR, lang, "translation.json");
 
   try {
-    const content = fs.readFileSync(filePath, "utf8");
+    const raw = fs.readFileSync(filePath);
+    if (
+      raw.length >= 3 &&
+      raw[0] === 0xef &&
+      raw[1] === 0xbb &&
+      raw[2] === 0xbf
+    ) {
+      throw new Error("UTF-8 BOM is not allowed");
+    }
+    const content = new TextDecoder("utf-8", { fatal: true }).decode(raw);
     return JSON.parse(content) as TranslationData;
   } catch (error) {
     console.error(colorize(`✗ Error loading ${lang}/translation.json:`, "red"));
@@ -111,13 +190,34 @@ function validateTranslations(): void {
   let hasErrors = false;
   const results: Record<string, ValidationResult> = {};
 
+  const referenceIssues = checkSharedCustomWords(
+    REFERENCE_LANG,
+    referenceData,
+    referenceData,
+  );
+  if (referenceIssues.length > 0) {
+    hasErrors = true;
+    console.log(
+      colorize(`✗ ${REFERENCE_LANG.toUpperCase()}: Issues found`, "red"),
+    );
+    for (const issue of referenceIssues) {
+      console.log(`    - ${issue}`);
+    }
+    console.log("");
+  }
+
   // Validate each language
   for (const lang of LANGUAGES) {
     const langData = loadTranslationFile(lang);
 
     if (!langData) {
       hasErrors = true;
-      results[lang] = { valid: false, missing: [], extra: [] };
+      results[lang] = {
+        valid: false,
+        missing: [],
+        extra: [],
+        issues: ["Failed to parse UTF-8 JSON without BOM"],
+      };
       continue;
     }
 
@@ -132,13 +232,16 @@ function validateTranslations(): void {
       (keyPath) => !hasKeyPath(referenceData, keyPath),
     );
 
+    const issues = checkSharedCustomWords(lang, langData, referenceData);
+
     results[lang] = {
-      valid: missing.length === 0 && extra.length === 0,
+      valid: missing.length === 0 && extra.length === 0 && issues.length === 0,
       missing,
       extra,
+      issues,
     };
 
-    if (missing.length > 0 || extra.length > 0) {
+    if (missing.length > 0 || extra.length > 0 || issues.length > 0) {
       hasErrors = true;
     }
   }
@@ -189,6 +292,15 @@ function validateTranslations(): void {
             colorize(`    ... and ${result.extra.length - 10} more`, "yellow"),
           );
         }
+      }
+
+      if (result.issues.length > 0) {
+        console.log(
+          colorize(`  Quality issues (${result.issues.length}):`, "yellow"),
+        );
+        result.issues.forEach((issue) => {
+          console.log(`    - ${issue}`);
+        });
       }
 
       console.log("");

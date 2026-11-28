@@ -13,6 +13,7 @@ from __future__ import annotations
 import concurrent.futures as cf
 import datetime as dt
 import difflib
+import faulthandler
 import gc
 import hashlib
 import json
@@ -111,6 +112,34 @@ logging.basicConfig(
     handlers=[logging.FileHandler(os.path.join(LOG_DIR, "server.log"), encoding="utf-8"),
               logging.StreamHandler(sys.stderr)])
 log = logging.getLogger("asr")
+
+INFERENCE_TIMEOUT_S = 45.0
+LOAD_TIMEOUT_S = float(os.environ.get("VOICE_ASR_LOAD_TIMEOUT_S", "180"))
+# Leave ~15 s headroom for replay + GPU decode under Handy's 90 s REMOTE_DEADLINES.
+LOAD_WAIT_S = float(os.environ.get("VOICE_ASR_LOAD_WAIT_S", "75"))
+
+
+def inference_call(device, fn, audio, **kwargs):
+    """A stuck native infer cannot be safely reset from another Python thread."""
+    cpu = device.upper().startswith("CPU")
+    timeout = max(300.0 if cpu else INFERENCE_TIMEOUT_S, len(audio) / SR * (20 if cpu else 3))
+    finished = threading.Event()
+
+    def expired():
+        if finished.is_set():
+            return
+        log.critical("%s inference exceeded %.1fs; restarting the server process", device, timeout)
+        faulthandler.dump_traceback()
+        os._exit(4)
+
+    timer = threading.Timer(timeout, expired)
+    timer.daemon = True
+    timer.start()
+    try:
+        return fn(audio, **kwargs)
+    finally:
+        finished.set()
+        timer.cancel()
 
 
 class Lexicon:
@@ -239,7 +268,7 @@ class Engine:
     """Process-wide models. Qwen runs on one thread (the GPU); Paraformer
     decodes are serialized by a lock (cheap, ~30 ms per 100 ms of audio)."""
 
-    def __init__(self, warm_up: bool = True):
+    def __init__(self, warm_up: bool = True, should_warm_up=None):
         t = time.time()
         # Stateful KV on the iGPU breaks once the cache crosses ~342 tokens (OpenVINO
         # 2026.4 GPU plugin); passing the KV explicitly is just as fast for short units.
@@ -264,7 +293,7 @@ class Engine:
             except Exception as e:
                 log.warning("punctuation model unavailable: %s", e)
         warm = np.zeros(SR, dtype=np.float32)
-        self.qwen.transcribe(warm, max_new_tokens=4)
+        inference_call(self.qwen.device + " warm-up", self.qwen.transcribe, warm, max_new_tokens=4)
         self.finals_running = 0
         self.npu = None
         self.npu_pool = cf.ThreadPoolExecutor(max_workers=1, thread_name_prefix="npu")
@@ -272,17 +301,20 @@ class Engine:
             try:
                 from qwen_npu import Qwen3AsrNPU
                 self.npu = Qwen3AsrNPU(NPU_DIR, **NPU_OPTS)
-                self.npu.transcribe(warm, max_new_tokens=4)
+                inference_call("NPU warm-up", self.npu.transcribe, warm, max_new_tokens=4)
             except Exception as e:
                 log.warning("NPU preview model unavailable: %s", str(e).splitlines()[0][:200])
                 self.npu = None
         t_load = time.time() - t
         if warm_up and CFG.warmup:
-            self.warmup()
+            if should_warm_up is None or should_warm_up():
+                self.warmup(should_continue=should_warm_up)
+            else:
+                log.info("warm-up skipped: client waiting")
         log.info("engine ready in %.1fs (load %.1fs; qwen device=%s, npu previews=%s, punct=%s)", time.time() - t,
                  t_load, self.qwen.device, bool(self.npu), bool(self.punct))
 
-    def warmup(self):
+    def warmup(self, should_continue=None):
         """Run the real request path (hotword prefix cache, NPU preview + rollback, speculative final,
         punctuation) on a recorded clip, so the user's first dictation is as fast as later ones."""
         if not os.path.exists(WARMUP_WAV):
@@ -296,16 +328,31 @@ class Engine:
             return
         t = time.time()
         try:
-            for _ in range(2):
+            r = None
+            for pass_idx in range(2):
+                if should_continue and not should_continue():
+                    log.info("warm-up %s: client waiting",
+                             "skipped" if pass_idx == 0 else f"yielded after pass {pass_idx}")
+                    return
                 ids = None
                 if self.npu:
                     p = self.submit_npu_preview(pcm, [], None, [], False).result()
+                    if should_continue and not should_continue():
+                        log.info("warm-up yielded after NPU preview: client waiting")
+                        return
                     p = self.submit_npu_preview(pcm, [], None, self.npu.rollback(p["ids"], 5), False).result()
                     ids = p.get("ids")
+                if should_continue and not should_continue():
+                    log.info("warm-up yielded before GPU pass %d: client waiting", pass_idx + 1)
+                    return
                 r = self.submit(pcm, [], None, draft_ids=ids, prefix_cache=True).result()
-            if self.punct:
+            if self.punct and r is not None:
+                if should_continue and not should_continue():
+                    log.info("warm-up yielded before punct: client waiting")
+                    return
                 self.punct.fix(r["text"][:-1], r["text"][-8:-1] or "ok", r["text"][-1:], 0.5)
-            log.info("warm-up done in %.1fs: %s", time.time() - t, r["text"][:40])
+            if r is not None:
+                log.info("warm-up done in %.1fs: %s", time.time() - t, r["text"][:40])
         except Exception as e:
             log.warning("warm-up failed: %s", str(e).splitlines()[0][:200])
 
@@ -337,19 +384,20 @@ class Engine:
             ctx = f"{ctx}\n{prior}" if ctx else prior
         lang_name = LANG_NAMES.get(language) if language else None
         try:
-            r = self.qwen.transcribe(audio, context=ctx, language=lang_name, abort=abort, draft_ids=draft_ids,
+            r = inference_call(self.qwen.device, self.qwen.transcribe, audio, context=ctx, language=lang_name, abort=abort, draft_ids=draft_ids,
                                      prefix_cache=prefix_cache)
         except Aborted:
             raise
         except Exception as e:
             log.warning("qwen failed (%s); rebuilding infer requests and retrying", str(e).splitlines()[0][:200])
             self.qwen.reset_requests()
-            r = self.qwen.transcribe(audio, context=ctx, language=lang_name)
+            r = inference_call(self.qwen.device + " retry", self.qwen.transcribe, audio, context=ctx, language=lang_name, abort=abort)
         if prior and echoes_context(r["text"], prior, len(audio) / SR):
             # a short unclear unit can make Qwen read the earlier text back; decode it again without it
             log.info("context echo (%.1fs audio): %r; re-decoding without prior text", len(audio) / SR, r["text"][:60])
             t0 = r.get("timings", {})
-            r = self.qwen.transcribe(audio, context=self.lexicon.context(vocab), language=lang_name,
+            r = inference_call(self.qwen.device + " context retry", self.qwen.transcribe, audio, context=self.lexicon.context(vocab), language=lang_name,
+                                     abort=abort,
                                      prefix_cache=prefix_cache)
             r.setdefault("timings", {})["echo_retry"] = 1
             r["timings"]["first_try_total"] = t0.get("total")
@@ -388,7 +436,7 @@ class Engine:
                            prefix_ids: list[int], yield_to_finals: bool) -> cf.Future:
         def job():
             lang_name = LANG_NAMES.get(language) if language else None
-            r = self.npu.transcribe(audio, context=self.lexicon.context(vocab), language=lang_name,
+            r = inference_call("NPU", self.npu.transcribe, audio, context=self.lexicon.context(vocab), language=lang_name,
                                     abort=self.finals_busy if yield_to_finals else None, prefix_ids=prefix_ids)
             r["text"] = self.lexicon.fix(r["text"])
             return r
@@ -416,12 +464,28 @@ def ensure_engine():
 
 def _boot():
     global ENGINE
+    finished = threading.Event()
+
+    def expired():
+        if finished.is_set():
+            return
+        log.critical("engine load exceeded %.1fs; restarting the server process", LOAD_TIMEOUT_S)
+        faulthandler.dump_traceback()
+        os._exit(3)
+
+    timer = threading.Timer(LOAD_TIMEOUT_S, expired)
+    timer.daemon = True
+    timer.start()
     try:
-        # someone is already waiting: skip the warm-up, their own request warms the models
-        eng = Engine(warm_up=LIFE["busy"] == 0)
+        # Check LIFE["busy"] after model load (not before): a client that began dictating while
+        # models were loading skips the warm-up so its own request gets the GPU immediately.
+        eng = Engine(warm_up=True, should_warm_up=lambda: LIFE["busy"] == 0)
     except Exception:
         log.critical("engine failed:\n%s", traceback.format_exc())
         os._exit(3)  # the supervisor restarts the server
+    finally:
+        finished.set()
+        timer.cancel()
     with LIFE_LOCK:
         ENGINE = eng
         LIFE["loading"] = False
@@ -462,7 +526,7 @@ def lifecycle():
                     unload_engine("night")
                 elif IDLE_UNLOAD_S > 0 and idle >= IDLE_UNLOAD_S:
                     unload_engine(f"idle {idle / 3600:.1f} h")
-            elif LIFE["reason"] == "night" and not in_night():
+            elif LIFE["reason"] == "night" and not LIFE["loading"] and not in_night():
                 log.info("offline window over: reloading")
                 ensure_engine()
         except Exception:
@@ -500,7 +564,7 @@ class LazyStream:
                 LIFE["busy"] -= 1
             touch()
 
-    def _ready(self, wait: float = 0) -> Stream | None:
+    def _ready(self, wait: float = 0, replay_preview: bool = True) -> Stream | None:
         if self.inner is None:
             if wait:
                 ENGINE_READY.wait(wait)
@@ -509,10 +573,24 @@ class LazyStream:
                 return None
             self.inner = Stream(eng, self.run)
             self.inner.revision = self.revision
+            had_waking = self.revision > 0
             if self.buf:
                 pcm, self.buf = np.concatenate(self.buf), []
-                for i in range(0, len(pcm), SR // 10):  # Silero VAD misreads one huge buffer
-                    self.inner.feed(pcm[i:i + SR // 10])
+                prev_allow = getattr(self.inner, "allow_preview", True)
+                if hasattr(self.inner, "allow_preview"):
+                    self.inner.allow_preview = False
+                try:
+                    for i in range(0, len(pcm), SR // 10):  # Silero VAD misreads one huge buffer
+                        self.inner.feed(pcm[i:i + SR // 10])
+                finally:
+                    if hasattr(self.inner, "allow_preview"):
+                        self.inner.allow_preview = prev_allow and replay_preview
+            elif hasattr(self.inner, "allow_preview"):
+                self.inner.allow_preview = replay_preview
+            if had_waking and hasattr(self.inner, "last_text"):
+                # Intermediate replay outputs were discarded; mark last_text as WAKING so the
+                # next live feed replaces the waking banner on the overlay even on silence.
+                self.inner.last_text = ("", self.WAKING)
         return self.inner
 
     def feed(self, pcm: np.ndarray) -> dict:
@@ -533,7 +611,7 @@ class LazyStream:
 
     def finalize(self, want_language: bool) -> dict:
         try:
-            s = self._ready(wait=120)
+            s = self._ready(wait=LOAD_WAIT_S, replay_preview=False)
             if s is None:
                 return {"BackendError": "ASR server: the models did not load in time"}
             return s.finalize(want_language)
@@ -680,6 +758,7 @@ class Stream:
         self.preview_res: dict | None = None  # newest finished preview of the current region
         self.n_preview = 0
         self.preview_ms: list[int] = []
+        self.allow_preview = True
 
     def _para_text(self) -> str:
         return self.eng.para.get_result(self.para).strip()
@@ -764,6 +843,8 @@ class Stream:
         return join_text(parts)[-n:]
 
     def _maybe_preview(self):
+        if not self.allow_preview:
+            return
         p = self.preview
         if p and p["future"].done():
             self.preview = None
@@ -1126,14 +1207,14 @@ class Handler(socketserver.StreamRequestHandler):
                     if k == "Status":
                         resp = {"Status": status_info()}
                     elif k == "Hello":
-                        if acquire_engine(55) is None:
-                            resp = {"Error": "ASR server: the models are still loading"}
-                        else:
-                            resp = {"Hello": {"devices": [DEVICE] if body.get("list_devices") else None}}
+                        resp = {"Hello": {"devices": [DEVICE] if body.get("list_devices") else None}}
                     elif k == "Load":
-                        # Later unloads are invisible to the client: the next stream reloads the models.
-                        loaded = acquire_engine(170) is not None
-                        resp = {"Loaded": loaded_info()} if loaded else {"Error": "ASR server: the models failed to load"}
+                        # Never block the client handshake on a cold model load; StreamBegin/LazyStream
+                        # buffers audio and shows a waking banner while the models load in the background.
+                        touch()
+                        ensure_engine()
+                        loaded = True
+                        resp = {"Loaded": loaded_info()}
                     elif k == "AuditQuery":
                         resp = {"Audit": {"records": audit_around(float(body["ts"]), float(body.get("window_s", 600)))}}
                     elif k == "LexiconGet":
@@ -1146,7 +1227,7 @@ class Handler(socketserver.StreamRequestHandler):
                         with LIFE_LOCK:
                             LIFE["busy"] += 1
                         try:
-                            eng = acquire_engine(170)
+                            eng = acquire_engine(LOAD_WAIT_S)
                             resp = batch_run(eng, pcm, body.get("options") or {}) if eng else \
                                 {"BackendError": "ASR server: the models did not load in time"}
                         finally:

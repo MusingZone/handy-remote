@@ -801,7 +801,12 @@ impl ShortcutAction for TranscribeAction {
                     // otherwise a batch run of the samples. A cancel is surfaced
                     // as an error, so it never starts a batch run.
                     let transcription_time = Instant::now();
-                    let transcription_result = tm.transcribe_recording(samples);
+                    let decode_manager = Arc::clone(&tm);
+                    let transcription_result = tauri::async_runtime::spawn_blocking(move || {
+                        decode_manager.transcribe_recording(samples)
+                    })
+                    .await
+                    .unwrap_or_else(|e| Err(anyhow::anyhow!("Transcription task failed: {e}")));
 
                     // Await WAV save and verify
                     let wav_saved = match wav_handle.await {

@@ -600,7 +600,7 @@
         "duplicate": "\"{{word}}\" findes allerede",
         "shared": {
           "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
-          "pending": "Syncing with the Handy Remote server?",
+          "pending": "Syncing with the Handy Remote server…",
           "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
           "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
         }
@@ -1179,6 +1179,8 @@
     "loadingModel": "Indlæser model...",
     "remoteWaking": "Vækker serverens modeller…",
     "speakNow": "Tal nu",
+    "stopRecording": "Afslut optagelse",
+    "stopFailed": "Kunne ikke afslutte optagelsen. Klik på mikrofonen for at prøve igen.",
     "refineOn": "Denne diktering bliver finpudset · klik for at springe over",
     "refineOff": "Denne diktering bliver ikke finpudset · klik for at finpudse"
   },

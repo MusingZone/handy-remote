@@ -66,6 +66,12 @@ jobs:
       - name: Feedback tool tests
         working-directory: tools/feedback
         run: python -m unittest discover -s tests -v
+      - name: Server script tests
+        shell: powershell
+        run: .\server\tests\Test-ServerScripts.ps1
+      - name: Updater launch policy tests
+        shell: powershell
+        run: .\tools\updater\Test-LaunchPolicy.ps1
 
   frontend:
     runs-on: ubuntu-latest

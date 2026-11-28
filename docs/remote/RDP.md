@@ -93,11 +93,27 @@ Shortcuts injected into a Remote Desktop window should avoid Alt: when software 
 was pressed with Alt, the remaining bare Alt press shows the menu key tips of apps such as Windows 11
 Notepad, and the dictated text is lost. Ctrl+F9 works; Ctrl+Alt+F9 does not.
 
+### Administrator windows and recording readiness
+
+There are two different input paths. When the laptop records, the elevated **caret helper** reads the
+remote caret. When the remote PC's Handy records, **Handy itself** must run at the same or higher
+integrity level as the target application. An elevated helper does not grant those rights to Handy.
+Restarting Handy unelevated can therefore break both pasting and caret following in administrator
+VS Code, even though the helper is healthy. For an explicitly elevated updater policy, see
+[Unattended updater](../../tools/updater/README.md).
+
+VAD preloading removes model initialization from the first dictation, not RDP microphone startup.
+In on-demand mode, Remote Audio is opened after the shortcut; opening the stream and receiving its
+first audio are separate timings. Wait for the recording-ready cue, not just the overlay appearing.
+Diagnose `vad_ensure`, `open`, and `first audio arrived` separately in the app log. Do not turn on
+**Always-on microphone** to hide this delay without the user's consent.
+
 ## Troubleshooting
 
-| Symptom                                              | Check                                                                                                  |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Overlay stays at the screen edge in RDP              | Is `caret_helper.exe` running in the RDP session? `Get-Process caret_helper` on the server             |
-| `caret_helper NOT running (no interactive session?)` | Run `install.ps1` while signed in interactively; the helper needs a desktop session                    |
-| Works for normal apps, not for an admin terminal     | The task must run elevated: re-run `install.ps1` from an elevated PowerShell                           |
-| Overlay is offset                                    | Make sure the RDP window shows the whole remote desktop; report the case with the RDP display settings |
+| Symptom                                                                  | Check                                                                                                  |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Overlay stays at the screen edge in RDP                                  | Is `caret_helper.exe` running in the RDP session? `Get-Process caret_helper` on the server             |
+| `caret_helper NOT running (no interactive session?)`                     | Run `install.ps1` while signed in interactively; the helper needs a desktop session                    |
+| Works for normal apps, not for an admin terminal                         | The task must run elevated: re-run `install.ps1` from an elevated PowerShell                           |
+| Admin-app paste warning and bottom overlay when the remote Handy records | Check Handy's own run level, not just the helper's; restore its approved administrator launch policy   |
+| Overlay is offset                                                        | Make sure the RDP window shows the whole remote desktop; report the case with the RDP display settings |

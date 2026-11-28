@@ -600,7 +600,7 @@
         "duplicate": "\"{{word}}\" existiert bereits",
         "shared": {
           "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
-          "pending": "Syncing with the Handy Remote server?",
+          "pending": "Syncing with the Handy Remote server…",
           "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
           "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
         }
@@ -1179,6 +1179,8 @@
     "loadingModel": "Modell wird geladen...",
     "remoteWaking": "Modelle auf dem Server werden geweckt…",
     "speakNow": "Jetzt sprechen",
+    "stopRecording": "Aufnahme beenden",
+    "stopFailed": "Die Aufnahme konnte nicht beendet werden. Zum erneuten Versuchen auf das Mikrofon klicken.",
     "refineOn": "Dieses Diktat wird überarbeitet · Klicken zum Überspringen",
     "refineOff": "Dieses Diktat wird nicht überarbeitet · Klicken zum Überarbeiten"
   },

@@ -600,7 +600,7 @@
         "duplicate": "\"{{word}}\" zaten mevcut",
         "shared": {
           "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
-          "pending": "Syncing with the Handy Remote server?",
+          "pending": "Syncing with the Handy Remote server…",
           "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
           "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
         }
@@ -1179,6 +1179,8 @@
     "loadingModel": "Model yükleniyor...",
     "remoteWaking": "Sunucudaki modeller uyandırılıyor…",
     "speakNow": "Şimdi konuşun",
+    "stopRecording": "Kaydı bitir",
+    "stopFailed": "Kayıt bitirilemedi. Yeniden denemek için mikrofona tıklayın.",
     "refineOn": "Bu dikte düzenlenecek · atlamak için tıklayın",
     "refineOff": "Bu dikte düzenlenmeyecek · düzenlemek için tıklayın"
   },

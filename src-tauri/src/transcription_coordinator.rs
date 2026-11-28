@@ -108,6 +108,25 @@ struct Hold {
     locked: bool,
 }
 
+/// A physical hold key whose recording was stopped via the overlay while the
+/// key may still be held down.
+///
+/// Under Linux X11 with Tauri's global-shortcut backend, holding a key emits
+/// synthesized `Release`/`Press` pairs separated by a few milliseconds. While
+/// active, those pairs are absorbed using `RELEASE_GRACE` so they neither queue
+/// a `PendingPress` during `Processing` nor start a fresh recording once `Idle`.
+/// On Windows/macOS (`handy-keys`), holding emits a single `Press` and a single
+/// `Release`; once `RELEASE_GRACE` elapses after that `Release` with no repeat
+/// `Press`, the suppression clears and the next `Press` activates normally.
+struct SuppressedHold {
+    binding_id: String,
+    /// Deadline (`released_at + RELEASE_GRACE`) after an observed `Release`.
+    /// A `Press` before this deadline is an X11 auto-repeat pair (clears the
+    /// deadline and keeps suppressing); any input at or after the deadline
+    /// proves the release was genuine and clears the suppression.
+    release_deadline: Option<Instant>,
+}
+
 /// What to do with an input that arrives while the pipeline is busy
 /// (`Stage::Processing`). `remembered` is the press for the same binding
 /// already waiting for the pipeline to drain, if any.
@@ -207,6 +226,7 @@ enum Effect {
 /// Commands processed sequentially by the coordinator thread.
 enum Command {
     Input(InputEvent),
+    StopRecording,
     Cancel { recording_was_active: bool },
     ProcessingFinished,
 }
@@ -259,6 +279,7 @@ struct CoordinatorState {
     last_press: Option<Instant>,
     pending_release: Option<PendingRelease>,
     pending_press: Option<PendingPress>,
+    suppressed_hold: Option<SuppressedHold>,
 }
 
 impl CoordinatorState {
@@ -269,6 +290,7 @@ impl CoordinatorState {
             last_press: None,
             pending_release: None,
             pending_press: None,
+            suppressed_hold: None,
         }
     }
 
@@ -290,6 +312,29 @@ impl CoordinatorState {
     }
 
     fn on_input(&mut self, input: InputEvent, now: Instant) -> Option<Effect> {
+        if let Some(suppressed) = &self.suppressed_hold {
+            if suppressed
+                .release_deadline
+                .is_some_and(|deadline| now >= deadline)
+            {
+                self.suppressed_hold = None;
+            }
+        }
+        if let Some(suppressed) = &mut self.suppressed_hold {
+            if !input.external && input.binding_id == suppressed.binding_id {
+                if input.is_pressed {
+                    suppressed.release_deadline = None;
+                    debug!(
+                        "Ignoring repeat press for '{}' while hold key remains down after overlay stop",
+                        input.binding_id
+                    );
+                    return None;
+                }
+                suppressed.release_deadline = Some(now + RELEASE_GRACE);
+                return None;
+            }
+        }
+
         let pending_release_binding = self
             .pending_release
             .as_ref()
@@ -500,6 +545,24 @@ impl CoordinatorState {
         None
     }
 
+    fn on_stop_recording(&mut self) -> Option<Effect> {
+        let Stage::Recording(binding_id) = &self.stage else {
+            return None;
+        };
+        let binding_id = binding_id.clone();
+        let pending_release = self.pending_release.take();
+        if self.hold.as_ref().is_some_and(|h| !h.locked) {
+            let release_deadline = pending_release
+                .filter(|p| p.binding_id == binding_id)
+                .map(|p| p.deadline);
+            self.suppressed_hold = Some(SuppressedHold {
+                binding_id: binding_id.clone(),
+                release_deadline,
+            });
+        }
+        Some(self.begin_processing(binding_id, "overlay".to_string()))
+    }
+
     fn on_cancel(&mut self, recording_was_active: bool) {
         self.pending_release = None;
         // An explicit cancel abandons any remembered start too — the user
@@ -623,6 +686,11 @@ impl TranscriptionCoordinator {
                                 run_effect(&app, &mut state, effect);
                             }
                         }
+                        Command::StopRecording => {
+                            if let Some(effect) = state.on_stop_recording() {
+                                run_effect(&app, &mut state, effect);
+                            }
+                        }
                         Command::Cancel {
                             recording_was_active,
                         } => {
@@ -713,6 +781,13 @@ impl TranscriptionCoordinator {
         }
     }
 
+    /// Stop only the active take; repeated or late clicks must never start another.
+    pub fn stop_recording(&self) -> Result<(), String> {
+        self.tx
+            .send(Command::StopRecording)
+            .map_err(|_| "Transcription coordinator channel closed".to_string())
+    }
+
     pub fn notify_cancel(&self, recording_was_active: bool) {
         if self
             .tx
@@ -782,6 +857,302 @@ fn stop(app: &AppHandle, binding_id: &str, hotkey_string: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn overlay_stop_finishes_the_active_binding_in_every_activation_mode() {
+        for mode in [
+            ShortcutActivation::PushToTalk,
+            ShortcutActivation::Toggle,
+            ShortcutActivation::HoldOrToggle,
+        ] {
+            for binding in ["transcribe", "transcribe_with_post_process"] {
+                let mut state = CoordinatorState::new();
+                let now = Instant::now();
+                let input = |is_pressed| InputEvent {
+                    binding_id: binding.to_string(),
+                    hotkey_string: "test".to_string(),
+                    is_pressed,
+                    mode,
+                    hold_threshold: Duration::from_millis(300),
+                    external: false,
+                    received_at: now,
+                };
+                assert!(matches!(
+                    state.on_input(input(true), now),
+                    Some(Effect::Start { .. })
+                ));
+                state.on_input(input(false), now);
+                assert_eq!(
+                    state.on_stop_recording(),
+                    Some(Effect::Stop {
+                        binding_id: binding.to_string(),
+                        hotkey_string: "overlay".to_string(),
+                    })
+                );
+                assert_eq!(state.stage, Stage::Processing);
+                assert!(state.grace_deadline().is_none());
+                assert_eq!(state.on_grace_expired(), None);
+                assert_eq!(state.on_input(input(false), now), None);
+                assert_eq!(state.on_stop_recording(), None);
+                assert_eq!(state.on_processing_finished(), None);
+                assert_eq!(state.stage, Stage::Idle);
+            }
+        }
+    }
+
+    #[test]
+    fn overlay_stop_is_a_noop_when_idle_or_processing() {
+        let mut state = CoordinatorState::new();
+        assert_eq!(state.on_stop_recording(), None);
+        assert_eq!(state.stage, Stage::Idle);
+        state.begin_processing("transcribe".to_string(), "test".to_string());
+        assert_eq!(state.on_stop_recording(), None);
+        assert_eq!(state.on_processing_finished(), None);
+        assert_eq!(state.stage, Stage::Idle);
+    }
+
+    /// Under Linux X11 with Tauri's global-shortcut backend, holding a key
+    /// emits synthesized Release/Press auto-repeat pairs spaced > DEBOUNCE
+    /// apart. If the user clicks the overlay microphone while still holding the
+    /// key down, subsequent repeat pairs must neither queue a PendingPress
+    /// during Processing nor start a fresh recording once Idle — only a genuine
+    /// release (past RELEASE_GRACE) followed by a new Press may start again.
+    #[test]
+    fn overlay_stop_absorbs_x11_autorepeat_pairs_until_genuine_release() {
+        for mode in [
+            ShortcutActivation::PushToTalk,
+            ShortcutActivation::HoldOrToggle,
+        ] {
+            let mut state = CoordinatorState::new();
+            let mut clock = Instant::now();
+            let make = |is_pressed, at| InputEvent {
+                binding_id: BINDING.to_string(),
+                hotkey_string: "ctrl+space".to_string(),
+                is_pressed,
+                mode,
+                hold_threshold: HOLD_THRESHOLD,
+                external: false,
+                received_at: at,
+            };
+
+            assert!(matches!(
+                state.on_input(make(true, clock), clock),
+                Some(Effect::Start { .. })
+            ));
+            // Active-recording X11 repeat pairs (35ms period > 30ms DEBOUNCE, 2ms pair gap).
+            for _ in 0..3 {
+                clock += ms(35);
+                assert_eq!(state.on_input(make(false, clock), clock), None);
+                clock += ms(2);
+                assert_eq!(state.on_input(make(true, clock), clock), None);
+            }
+
+            // Mouse-stop while physical hold key remains down.
+            assert_eq!(
+                state.on_stop_recording(),
+                Some(Effect::Stop {
+                    binding_id: BINDING.to_string(),
+                    hotkey_string: "overlay".to_string(),
+                })
+            );
+            assert_eq!(state.stage, Stage::Processing);
+
+            // Repeat pairs during Processing must not queue a PendingPress.
+            for _ in 0..4 {
+                clock += ms(35);
+                assert_eq!(state.on_input(make(false, clock), clock), None);
+                clock += ms(2);
+                assert_eq!(state.on_input(make(true, clock), clock), None);
+            }
+            assert_eq!(
+                state.on_processing_finished(),
+                None,
+                "X11 auto-repeat after overlay stop must not queue a fresh recording ({mode:?})"
+            );
+            assert_eq!(state.stage, Stage::Idle);
+
+            // Repeat pairs continuing after drain must not start a recording while Idle.
+            for _ in 0..3 {
+                clock += ms(35);
+                assert_eq!(state.on_input(make(false, clock), clock), None);
+                clock += ms(2);
+                assert_eq!(state.on_input(make(true, clock), clock), None);
+                assert_eq!(state.stage, Stage::Idle);
+            }
+
+            // Genuine physical release with no follow-up repeat press.
+            clock += ms(35);
+            assert_eq!(state.on_input(make(false, clock), clock), None);
+            assert_eq!(state.stage, Stage::Idle);
+
+            // After RELEASE_GRACE, a deliberate new Press starts normally.
+            clock += RELEASE_GRACE + ms(10);
+            assert!(
+                matches!(
+                    state.on_input(make(true, clock), clock),
+                    Some(Effect::Start { .. })
+                ),
+                "new activation after genuine release must start recording ({mode:?})"
+            );
+            assert_eq!(state.stage, Stage::Recording(BINDING.to_string()));
+        }
+    }
+
+    /// Mouse-stop arriving right between an X11 synthesized Release (in
+    /// pending_release) and its paired synthesized Press a few ms later must
+    /// still recognize the key as held and absorb repeats until genuine release.
+    #[test]
+    fn overlay_stop_mid_x11_repeat_pair_absorbs_following_press() {
+        let mut state = CoordinatorState::new();
+        let mut clock = Instant::now();
+        let make = |is_pressed, at| InputEvent {
+            binding_id: BINDING.to_string(),
+            hotkey_string: "ctrl+space".to_string(),
+            is_pressed,
+            mode: ShortcutActivation::PushToTalk,
+            hold_threshold: Duration::ZERO,
+            external: false,
+            received_at: at,
+        };
+
+        assert!(matches!(
+            state.on_input(make(true, clock), clock),
+            Some(Effect::Start { .. })
+        ));
+        // Synthesized Release arrives, then mouse-stop fires 2ms later before the paired Press.
+        clock += ms(400);
+        assert_eq!(state.on_input(make(false, clock), clock), None);
+        assert!(state.grace_deadline().is_some());
+        assert!(matches!(
+            state.on_stop_recording(),
+            Some(Effect::Stop { .. })
+        ));
+        assert!(state.grace_deadline().is_none());
+
+        // Paired synthesized Press arrives inside RELEASE_GRACE -> must be absorbed.
+        clock += ms(3);
+        assert_eq!(state.on_input(make(true, clock), clock), None);
+        clock += ms(35);
+        assert_eq!(state.on_input(make(false, clock), clock), None);
+        clock += ms(2);
+        assert_eq!(state.on_input(make(true, clock), clock), None);
+
+        assert_eq!(state.on_processing_finished(), None);
+        assert_eq!(state.stage, Stage::Idle);
+
+        // Genuine release + grace -> next Press starts normally.
+        clock += ms(35);
+        assert_eq!(state.on_input(make(false, clock), clock), None);
+        clock += RELEASE_GRACE + ms(10);
+        assert!(matches!(
+            state.on_input(make(true, clock), clock),
+            Some(Effect::Start { .. })
+        ));
+    }
+
+    /// Preserves Windows/macOS handy-keys behavior (single Press + single
+    /// Release, no auto-repeat): releasing after overlay stop, releasing just
+    /// before overlay stop, or stopping a locked/toggle session all allow clean
+    /// re-activation on the next Press.
+    #[test]
+    fn overlay_stop_preserves_handy_keys_single_release_and_reactivation() {
+        let t0 = Instant::now();
+        let make = |mode, is_pressed, at| InputEvent {
+            binding_id: BINDING.to_string(),
+            hotkey_string: "ctrl+alt+f8".to_string(),
+            is_pressed,
+            mode,
+            hold_threshold: HOLD_THRESHOLD,
+            external: false,
+            received_at: at,
+        };
+
+        // (a) Single Release arrives after overlay stop; subsequent Press during
+        // Processing queues a PendingPress and starts on drain.
+        let mut state = CoordinatorState::new();
+        assert!(matches!(
+            state.on_input(make(ShortcutActivation::PushToTalk, true, t0), t0),
+            Some(Effect::Start { .. })
+        ));
+        assert!(matches!(
+            state.on_stop_recording(),
+            Some(Effect::Stop { .. })
+        ));
+        assert_eq!(
+            state.on_input(
+                make(ShortcutActivation::PushToTalk, false, t0 + ms(200)),
+                t0 + ms(200)
+            ),
+            None
+        );
+        assert_eq!(
+            state.on_input(
+                make(ShortcutActivation::PushToTalk, true, t0 + ms(270)),
+                t0 + ms(270)
+            ),
+            None
+        );
+        assert!(matches!(
+            state.on_processing_finished(),
+            Some(Effect::Start { .. })
+        ));
+
+        // (b) Single Release arrived 10ms before overlay stop (no second Release
+        // will ever arrive); after RELEASE_GRACE elapses, a new Press starts.
+        let mut state = CoordinatorState::new();
+        assert!(matches!(
+            state.on_input(make(ShortcutActivation::PushToTalk, true, t0), t0),
+            Some(Effect::Start { .. })
+        ));
+        assert_eq!(
+            state.on_input(
+                make(ShortcutActivation::PushToTalk, false, t0 + ms(500)),
+                t0 + ms(500)
+            ),
+            None
+        );
+        assert!(matches!(
+            state.on_stop_recording(),
+            Some(Effect::Stop { .. })
+        ));
+        assert_eq!(state.on_processing_finished(), None);
+        assert!(matches!(
+            state.on_input(
+                make(ShortcutActivation::PushToTalk, true, t0 + ms(600)),
+                t0 + ms(600)
+            ),
+            Some(Effect::Start { .. })
+        ));
+
+        // (c) Tap-locked HoldOrToggle session: key was already released before
+        // overlay stop, so a new Press works without needing another Release.
+        let mut state = CoordinatorState::new();
+        assert!(matches!(
+            state.on_input(make(ShortcutActivation::HoldOrToggle, true, t0), t0),
+            Some(Effect::Start { .. })
+        ));
+        assert_eq!(
+            state.on_input(
+                make(ShortcutActivation::HoldOrToggle, false, t0 + ms(100)),
+                t0 + ms(100)
+            ),
+            None
+        );
+        assert_eq!(state.on_grace_expired(), None);
+        assert!(state.is_locked());
+        assert!(matches!(
+            state.on_stop_recording(),
+            Some(Effect::Stop { .. })
+        ));
+        assert_eq!(state.on_processing_finished(), None);
+        assert!(matches!(
+            state.on_input(
+                make(ShortcutActivation::HoldOrToggle, true, t0 + ms(500)),
+                t0 + ms(500)
+            ),
+            Some(Effect::Start { .. })
+        ));
+    }
 
     #[test]
     fn push_to_talk_release_while_recording_defers_release() {

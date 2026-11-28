@@ -723,6 +723,14 @@ async showMainWindowCommand() : Promise<Result<null, string>> {
 async cancelOperation() : Promise<void> {
     await TAURI_INVOKE("cancel_operation");
 },
+async stopRecording() : Promise<Result<null, string>> {
+    try {
+        return { status: "ok", data: await TAURI_INVOKE("stop_recording") };
+    } catch (e) {
+        if (typeof e === "string") return { status: "error", error: e };
+        throw e;
+    }
+},
 /**
  * Fork: the overlay's refine switch, for the dictation in progress only.
  */

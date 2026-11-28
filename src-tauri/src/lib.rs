@@ -799,6 +799,7 @@ pub fn run(cli_args: CliArgs) {
             trigger_update_check,
             show_main_window_command,
             commands::cancel_operation,
+            commands::stop_recording,
             commands::set_refine_skipped,
             commands::is_portable,
             commands::is_update_checks_locked,
@@ -1174,7 +1175,10 @@ pub fn run(cli_args: CliArgs) {
             let devices_app_handle = app_handle.clone();
             std::thread::spawn(move || {
                 let tm = devices_app_handle.state::<Arc<TranscriptionManager>>();
-                crate::managers::transcription::report_compute_devices(&tm);
+                crate::managers::transcription::report_compute_devices_with_retry(
+                    &tm,
+                    remote::active(),
+                );
                 let _ = crate::managers::transcription::get_available_accelerators(&tm);
             });
 

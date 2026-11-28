@@ -600,7 +600,7 @@
         "duplicate": "„{{word}}“ вече съществува",
         "shared": {
           "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
-          "pending": "Syncing with the Handy Remote server?",
+          "pending": "Syncing with the Handy Remote server…",
           "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
           "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
         }
@@ -1179,6 +1179,8 @@
     "loadingModel": "Зареждане на модела...",
     "remoteWaking": "Събуждане на моделите на сървъра…",
     "speakNow": "Говорете",
+    "stopRecording": "Край на записа",
+    "stopFailed": "Записът не може да бъде завършен. Щракнете върху микрофона за нов опит.",
     "refineOn": "Тази диктовка ще бъде изгладена · щракнете, за да пропуснете",
     "refineOff": "Тази диктовка няма да бъде изгладена · щракнете, за да я изгладите"
   },

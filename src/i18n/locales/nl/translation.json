@@ -600,7 +600,7 @@
         "duplicate": "\"{{word}}\" bestaat al",
         "shared": {
           "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
-          "pending": "Syncing with the Handy Remote server?",
+          "pending": "Syncing with the Handy Remote server…",
           "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
           "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
         }
@@ -1179,6 +1179,8 @@
     "loadingModel": "Model laden...",
     "remoteWaking": "Modellen op de server worden gewekt…",
     "speakNow": "Spreek nu",
+    "stopRecording": "Opname beëindigen",
+    "stopFailed": "De opname kon niet worden beëindigd. Klik op de microfoon om het opnieuw te proberen.",
     "refineOn": "Dit dictaat wordt bijgeschaafd · klik om over te slaan",
     "refineOff": "Dit dictaat wordt niet bijgeschaafd · klik om bij te schaven"
   },

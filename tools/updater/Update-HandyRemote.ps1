@@ -18,6 +18,7 @@ param(
     [string]$PublicKey = 'dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM2MTZGMTlEMThBRDcwNApSV1FFMTRyUkdXOWhBOTU2K1lpZS92L0JNWUN1K1M3N2ZQMUtidUwxZEpVempBWEpMR1FZYzZOMAo=',
     [string]$ProductName = 'Handy Remote',
     [string]$Identifier = 'com.musingzone.handy-remote',
+    [string]$TaskName = 'HandyRemote-AutoUpdate',
     [int]$IdleMinutes = 2,
     [int]$MaxWaitMinutes = 45,
     [int]$HealthSeconds = 30,
@@ -104,6 +105,43 @@ function Start-App($inst) {
     }
 }
 
+function Test-Administrator {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    try { return (New-Object Security.Principal.WindowsPrincipal($identity)).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) }
+    finally { $identity.Dispose() }
+}
+
+function Assert-LaunchContext {
+    $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    if ($task -and $task.Principal.RunLevel -eq 'Highest' -and -not (Test-Administrator)) {
+        throw "Task '$TaskName' requires administrator rights. Run this updater as administrator; refusing to restart Handy at a lower integrity level."
+    }
+}
+
+function Get-AppElevation([int]$processId) {
+    return [HrIdle]::ProcessElevated($processId)
+}
+
+function Test-AppLaunchHealth($inst) {
+    $processes = @(Get-AppProcesses $inst)
+    if (-not $processes.Count) { return $false }
+    $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    if ($task -and $task.Principal.RunLevel -eq 'Highest') {
+        foreach ($process in $processes) {
+            try { $elevated = Get-AppElevation $process.Id }
+            catch [System.ComponentModel.Win32Exception] {
+                Log "cannot verify app $($process.Id) launch token: $($_.Exception.Message)"
+                return $false
+            }
+            if (-not $elevated) {
+                Log "app $($process.Id) restarted without administrator rights; launch health check failed"
+                return $false
+            }
+        }
+    }
+    return $true
+}
+
 function Stop-App($inst) {
     foreach ($p in (Get-AppProcesses $inst)) {
         Log "stopping $($p.Id)"
@@ -125,6 +163,22 @@ public static class HrIdle {
     }
     [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
     [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool GetTokenInformation(IntPtr token, int kind, out int value, int size, out int needed);
+    public static bool ProcessElevated(int pid) {
+        IntPtr process = OpenProcess(0x1000, false, pid);
+        if (process == IntPtr.Zero) throw new System.ComponentModel.Win32Exception();
+        try {
+            IntPtr token;
+            if (!OpenProcessToken(process, 8, out token)) throw new System.ComponentModel.Win32Exception();
+            try {
+                int value, needed;
+                if (!GetTokenInformation(token, 20, out value, sizeof(int), out needed))
+                    throw new System.ComponentModel.Win32Exception();
+                return value != 0;
+            } finally { CloseHandle(token); }
+        } finally { CloseHandle(process); }
+    }
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool QueryFullProcessImageName(IntPtr h, uint flags, System.Text.StringBuilder name, ref uint size);
     public static string ImagePath(int pid) {
         IntPtr h = OpenProcess(0x1000, false, pid);
@@ -271,6 +325,7 @@ try {
     if (-not $needed) { Log 'app is current' }
     elseif ($CheckOnly) { Log "would install $latest" }
     else {
+        Assert-LaunchContext
         $setupAsset = Get-Asset $release '*x64-setup.exe'
         $sigAsset = Get-Asset $release '*x64-setup.exe.sig'
         if (-not $setupAsset -or -not $sigAsset) { throw 'release has no x64 installer and signature' }
@@ -302,7 +357,7 @@ try {
         if ($ok) {
             Start-App $new
             Start-Sleep -Seconds $HealthSeconds
-            $ok = [bool](Get-AppProcesses $new)
+            $ok = Test-AppLaunchHealth $new
         }
         if ($ok) {
             Notify "updated to $($new.Version)"

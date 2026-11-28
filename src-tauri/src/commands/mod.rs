@@ -16,6 +16,17 @@ pub fn cancel_operation(app: AppHandle) {
     cancel_current_operation(&app);
 }
 
+#[tauri::command]
+#[specta::specta]
+pub fn stop_recording(app: AppHandle) -> Result<(), String> {
+    app.state::<crate::TranscriptionCoordinator>()
+        .stop_recording()
+        .map_err(|error| {
+            log::error!("Failed to stop recording from overlay: {error}");
+            error
+        })
+}
+
 /// Fork: the overlay's refine switch, for the dictation in progress only.
 #[tauri::command]
 #[specta::specta]

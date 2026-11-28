@@ -30,13 +30,13 @@ Client PC                                             Server PC (Windows, CPU / 
 The server speaks Handy's own worker protocol over TCP. Each frame is
 `[u32 LE json_len][json][u32 LE pcm_bytes][f32 LE pcm]`.
 
-| Request                                          | Purpose                                                         |
-| ------------------------------------------------ | --------------------------------------------------------------- |
-| `Status`                                         | Cheap health report for **Test connection**; never wakes models |
-| `Hello`, `Load`                                  | Handshake and model load (waits for the models)                 |
-| `StreamBegin`, `Feed`, `Finalize`, `StreamReset` | Streaming dictation                                             |
-| `Run`                                            | One-shot transcription of a whole clip                          |
-| `AuditQuery`, `LexiconGet`, `LexiconPut`         | Feedback tool and shared custom words; no shell access needed   |
+| Request                                          | Purpose                                                                                                                              |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `Status`                                         | Cheap health report for **Test connection**; never wakes models                                                                      |
+| `Hello`, `Load`                                  | Handshake and device/model metadata return promptly (`Hello` never wakes models; `Load` starts any cold model load asynchronously)   |
+| `StreamBegin`, `Feed`, `Finalize`, `StreamReset` | Streaming dictation; during a cold load, `LazyStream` buffers audio and `Finalize` waits up to a bounded load timeout (75 s default) |
+| `Run`                                            | One-shot transcription of a whole clip; waits up to the same bounded cold-load timeout (75 s default) when models are loading        |
+| `AuditQuery`, `LexiconGet`, `LexiconPut`         | Feedback tool and shared custom words; no shell access needed                                                                        |
 
 ## Recognition pipeline (server)
 
@@ -80,10 +80,11 @@ The server speaks Handy's own worker protocol over TCP. Each frame is
   clip `warmup.wav` if present, otherwise silence).
 - After `idle_unload_hours` without use, and optionally inside a daily `offline_window`, the models are
   unloaded to free memory.
-- The next dictation reloads them on demand. Meanwhile the server
-  buffers your audio and sends the status token `{{handy-remote:waking}}`; the client shows a localized
-  "waking the model" notice in the overlay. The buffered audio is replayed after the load, so nothing
-  is lost.
+- The next dictation reloads them asynchronously on demand without blocking `Hello`/`Load`. Meanwhile
+  `LazyStream` buffers your audio and sends the status token `{{handy-remote:waking}}`; the client
+  shows a localized "waking the model" notice in the overlay, and `Finalize` (or batch `Run`) waits
+  up to a bounded timeout (`LOAD_WAIT_S`, 75 s default) for the load to finish. The buffered audio
+  is replayed after the load, so nothing is lost.
 
 ## Client additions
 

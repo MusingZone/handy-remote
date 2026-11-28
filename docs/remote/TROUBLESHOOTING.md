@@ -63,6 +63,40 @@ exits mean the server cannot start; look at `server.stderr.log`.
 
 ## Common problems
 
+### End recording without the keyboard
+
+Click the microphone on the left of the overlay to finish the current recording
+and transcribe/paste it normally. It remains visible for the entire recording,
+including microphone startup, in both Live and Minimal overlays. This does not
+activate the overlay or change the paste target. The **X** still cancels and
+discards the take; it is not the finish button.
+
+The microphone button is disabled after a stop request and disappears when
+processing starts. Repeated or late clicks never start another recording. If the
+request fails, an inline message is shown and the microphone can be clicked again.
+
+### Stopped dictation keeps showing "Transcribing..."
+
+Use the overlay's **Copy** button to rescue all committed and tentative text, including
+text above the visible scroll area. Copy works while recording, finalizing, polishing,
+or displaying an error, without activating the overlay or changing the paste target.
+A copy failure is shown inline and can be retried. Preview text is provisional, not
+a verified final transcript.
+
+Remote streaming failures are reported instead of automatically submitting the same
+audio to the same server again. The error overlay retains its transcript until you
+dismiss it or start another dictation. The saved audio remains in History for retry.
+
+The server bounds each GPU/NPU inference call (at least 45 seconds, or three times the
+audio duration). A stalled native call logs its thread stacks and exits with code `4`;
+the installed server supervisor restarts the process. A server run directly in a
+console must be restarted manually. This releases stuck native inference state rather
+than leaving subsequent requests waiting behind it. The client also bounds remote
+calls separately from slower local CPU inference. Check both server and supervisor logs;
+repeated stalls require investigating the device/driver, not increasing client timeouts.
+CPU server inference keeps a larger budget (at least five minutes or 20 times the audio
+duration) so an intentionally selected slow CPU is not mistaken for a stuck accelerator.
+
 | Symptom                                                        | Check                                                                                                                            |
 | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | First word missing                                             | Wait for the ready cue (mic glyph with expanding ring) before speaking                                                           |

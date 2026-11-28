@@ -600,7 +600,7 @@
         "duplicate": "「{{word}}」は既に存在します",
         "shared": {
           "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
-          "pending": "Syncing with the Handy Remote server?",
+          "pending": "Syncing with the Handy Remote server…",
           "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
           "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
         }
@@ -1179,6 +1179,8 @@
     "loadingModel": "モデルを読み込み中…",
     "remoteWaking": "サーバーのモデルを起動中…",
     "speakNow": "どうぞ",
+    "stopRecording": "録音を終了",
+    "stopFailed": "録音を終了できませんでした。マイクをクリックして再試行してください。",
     "refineOn": "この入力を整形します · クリックでスキップ",
     "refineOff": "この入力は整形しません · クリックで整形"
   },

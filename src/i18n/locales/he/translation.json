@@ -600,7 +600,7 @@
         "duplicate": "\"{{word}}\" כבר קיימת",
         "shared": {
           "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
-          "pending": "Syncing with the Handy Remote server?",
+          "pending": "Syncing with the Handy Remote server…",
           "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
           "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
         }
@@ -1179,6 +1179,8 @@
     "loadingModel": "טוען מודל...",
     "remoteWaking": "מעיר את המודלים בשרת…",
     "speakNow": "דבר עכשיו",
+    "stopRecording": "סיום ההקלטה",
+    "stopFailed": "לא ניתן לסיים את ההקלטה. לחצו על המיקרופון כדי לנסות שוב.",
     "refineOn": "ההכתבה הזו תלוטש · לחצו כדי לדלג",
     "refineOff": "ההכתבה הזו לא תלוטש · לחצו כדי ללטש"
   },
