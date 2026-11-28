@@ -597,7 +597,13 @@
         "placeholder": "Tambahkan kata",
         "add": "Tambah",
         "remove": "Hapus {{word}}",
-        "duplicate": "\"{{word}}\" sudah ada"
+        "duplicate": "\"{{word}}\" sudah ada",
+        "shared": {
+          "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
+          "pending": "Syncing with the Handy Remote server…",
+          "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
+          "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
+        }
       },
       "voiceActivityDetection": {
         "title": "Deteksi Aktivitas Suara",
@@ -1173,6 +1179,8 @@
     "loadingModel": "Memuat model...",
     "remoteWaking": "Membangunkan model di server…",
     "speakNow": "Silakan bicara",
+    "stopRecording": "Selesaikan rekaman",
+    "stopFailed": "Tidak dapat menyelesaikan rekaman. Klik mikrofon untuk mencoba lagi.",
     "refineOn": "Dikte ini akan dirapikan · klik untuk melewati",
     "refineOff": "Dikte ini tidak dirapikan · klik untuk merapikan"
   },

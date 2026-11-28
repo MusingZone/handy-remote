@@ -597,7 +597,13 @@
         "placeholder": "新增詞彙",
         "add": "新增",
         "remove": "刪除 {{word}}",
-        "duplicate": "「{{word}}」已存在"
+        "duplicate": "「{{word}}」已存在",
+        "shared": {
+          "synced": "已透過 Handy Remote 伺服器共享：共 {{count}} 個詞彙，你的其他電腦也會使用。",
+          "pending": "正在與 Handy Remote 伺服器同步…",
+          "unsupported": "更新 Handy Remote 伺服器後，即可與其他電腦共享這些詞彙。",
+          "failed": "無法與伺服器同步（{{error}}）。你的變更已保留，稍後會繼續同步。"
+        }
       },
       "voiceActivityDetection": {
         "title": "語音活動偵測",
@@ -1173,6 +1179,8 @@
     "loadingModel": "正在載入模型...",
     "remoteWaking": "正在喚醒伺服器上的模型…",
     "speakNow": "請說話",
+    "stopRecording": "結束錄音",
+    "stopFailed": "無法結束錄音，請點擊麥克風重試。",
     "refineOn": "本次會潤飾 · 點擊略過",
     "refineOff": "本次不潤飾 · 點擊恢復"
   },

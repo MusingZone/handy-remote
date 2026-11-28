@@ -597,7 +597,13 @@
         "placeholder": "Szó hozzáadása",
         "add": "Hozzáadás",
         "remove": "Eltávolítás: {{word}}",
-        "duplicate": "„{{word}}” már szerepel a listában"
+        "duplicate": "„{{word}}” már szerepel a listában",
+        "shared": {
+          "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
+          "pending": "Syncing with the Handy Remote server…",
+          "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
+          "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
+        }
       },
       "voiceActivityDetection": {
         "title": "Hangaktivitás-észlelés",
@@ -1173,6 +1179,8 @@
     "loadingModel": "Modell betöltése...",
     "remoteWaking": "Waking the server's models…",
     "speakNow": "Speak now",
+    "stopRecording": "Felvétel befejezése",
+    "stopFailed": "Nem sikerült befejezni a felvételt. Az újrapróbálkozáshoz kattintson a mikrofonra.",
     "refineOn": "Polishing this dictation · click to skip",
     "refineOff": "Not polishing this dictation · click to polish"
   },

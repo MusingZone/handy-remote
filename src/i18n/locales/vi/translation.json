@@ -597,7 +597,13 @@
         "placeholder": "Thêm một từ",
         "add": "Thêm",
         "remove": "Xóa {{word}}",
-        "duplicate": "\"{{word}}\" đã tồn tại"
+        "duplicate": "\"{{word}}\" đã tồn tại",
+        "shared": {
+          "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
+          "pending": "Syncing with the Handy Remote server…",
+          "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
+          "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
+        }
       },
       "voiceActivityDetection": {
         "title": "Phát hiện hoạt động giọng nói",
@@ -1173,6 +1179,8 @@
     "loadingModel": "Đang tải mô hình...",
     "remoteWaking": "Đang đánh thức các mô hình trên máy chủ…",
     "speakNow": "Hãy nói",
+    "stopRecording": "Kết thúc ghi âm",
+    "stopFailed": "Không thể kết thúc ghi âm. Nhấp vào micrô để thử lại.",
     "refineOn": "Sẽ trau chuốt lần đọc này · bấm để bỏ qua",
     "refineOff": "Không trau chuốt lần đọc này · bấm để bật lại"
   },

@@ -42,6 +42,13 @@ const LOAD_TIMEOUT: Duration = Duration::from_secs(180);
 const CALL_FLOOR: Duration = Duration::from_secs(30);
 /// How long a worker gets to exit after its stdin closes before it's killed.
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(2);
+/// Backoff between reconnect attempts when a remote server is still booting or restarting.
+const REMOTE_RECONNECT_BACKOFF: [Duration; 4] = [
+    Duration::from_secs(1),
+    Duration::from_secs(2),
+    Duration::from_secs(4),
+    Duration::from_secs(6),
+];
 /// Native stderr lines kept for crash reports (a `GGML_ASSERT` message lands
 /// here right before an abort).
 const STDERR_TAIL_LINES: usize = 64;
@@ -77,6 +84,14 @@ const CPU_DEADLINES: Deadlines = Deadlines {
     call_floor: Duration::from_secs(120),
     run_floor: Duration::from_secs(300),
     audio_factor: 20.0,
+};
+
+// A remote server may advertise CPU while using an accelerator. Killing its
+// transport does not stop inference there, so CPU's 20x budget is inappropriate.
+const REMOTE_DEADLINES: Deadlines = Deadlines {
+    call_floor: Duration::from_secs(90),
+    run_floor: Duration::from_secs(90),
+    audio_factor: 6.0,
 };
 
 impl Deadlines {
@@ -239,38 +254,49 @@ struct Shared {
 }
 
 impl Shared {
-    /// Start a model-less worker just to list devices. If it may use the GPU
-    /// and crashes or hangs doing so, the GPU is marked unavailable.
+    /// Start a model-less worker just to list devices. If a local worker may
+    /// use the GPU and crashes or hangs doing so, the GPU is marked
+    /// unavailable. Remote workers never mark the local GPU unavailable.
     fn probe_devices(&self) {
         let cpu_only = !self.gpu_allowed;
         match self.hello(cpu_only, true) {
             Ok(worker) => drop(worker),
-            Err(failure) => {
-                error!(
-                    "Could not start a transcription worker to list compute devices: {}",
-                    failure
-                );
-                if failure.worker_lost() && !cpu_only {
-                    self.mark_gpu_unavailable(format!(
-                        "a worker with GPU backends {failure} while listing compute devices"
-                    ));
-                }
-            }
+            Err(err) => self.record_probe_failure(&err, cpu_only),
+        }
+    }
+
+    fn record_probe_failure(&self, err: &StartFailure, cpu_only: bool) {
+        error!(
+            "Could not start a transcription worker to list compute devices: {}",
+            err.failure
+        );
+        if err.failure.worker_lost() && !cpu_only && !err.remote {
+            self.mark_gpu_unavailable(format!(
+                "a worker with GPU backends {} while listing compute devices",
+                err.failure
+            ));
         }
     }
 
     /// Start a worker and say hello, publishing its device list if it lists
     /// one.
-    fn hello(&self, cpu_only: bool, list_devices: bool) -> Result<Worker, Failure> {
-        let mut worker = Worker::spawn(cpu_only).map_err(Failure::Spawn)?;
-        match worker.call(&Request::Hello { list_devices }, None, HELLO_TIMEOUT)? {
+    fn hello(&self, cpu_only: bool, list_devices: bool) -> Result<Worker, StartFailure> {
+        let mut worker = Worker::spawn(cpu_only)?;
+        let remote = worker.remote;
+        match worker
+            .call(&Request::Hello { list_devices }, None, HELLO_TIMEOUT)
+            .map_err(|failure| StartFailure { failure, remote })?
+        {
             Response::Hello { devices } => {
                 if let Some(devices) = devices {
                     self.set_devices(devices);
                 }
                 Ok(worker)
             }
-            other => Err(unexpected(&other)),
+            other => Err(StartFailure {
+                failure: unexpected(&other),
+                remote,
+            }),
         }
     }
 
@@ -454,6 +480,8 @@ impl EngineSupervisor {
                 closed: Arc::clone(&closed),
                 on_progress: Box::new(on_progress),
                 pending_ms: 0,
+                remote: false,
+                failure: None,
             },
             run,
             stream,
@@ -561,6 +589,16 @@ fn engine_stopped() -> EngineError {
     EngineError::Failed("the transcription engine has stopped".to_string())
 }
 
+fn stream_failure(remote: bool, message: String) -> Result<Option<Finalized>, EngineError> {
+    if remote {
+        // A new transport still talks to the same possibly stuck server.
+        // Keep the preview and recording for explicit recovery, not another run.
+        Err(EngineError::Failed(message))
+    } else {
+        Ok(None)
+    }
+}
+
 fn not_loaded() -> EngineError {
     EngineError::Failed("no transcription model is loaded".to_string())
 }
@@ -615,6 +653,58 @@ impl From<Failure> for EngineError {
     }
 }
 
+#[derive(Debug)]
+struct StartFailure {
+    failure: Failure,
+    remote: bool,
+}
+
+fn start_with_remote_retry<T>(
+    delays: &[Duration],
+    mut should_stop: impl FnMut() -> bool,
+    mut attempt: impl FnMut() -> Result<T, StartFailure>,
+) -> Result<T, StartFailure> {
+    let mut retries = delays.iter().copied();
+    loop {
+        match attempt() {
+            Ok(ok) => return Ok(ok),
+            Err(err) if err.remote && matches!(err.failure, Failure::Crashed(_)) => {
+                let Some(delay) = retries.next() else {
+                    return Err(err);
+                };
+                if should_stop() {
+                    return Err(StartFailure {
+                        failure: Failure::Cancelled,
+                        remote: true,
+                    });
+                }
+                warn!(
+                    "Remote transcription server not reachable ({}); retrying in {:?}",
+                    err.failure, delay
+                );
+                let deadline = Instant::now() + delay;
+                while Instant::now() < deadline {
+                    if should_stop() {
+                        return Err(StartFailure {
+                            failure: Failure::Cancelled,
+                            remote: true,
+                        });
+                    }
+                    let remaining = deadline.saturating_duration_since(Instant::now());
+                    thread::sleep(remaining.min(Duration::from_millis(100)));
+                }
+                if should_stop() {
+                    return Err(StartFailure {
+                        failure: Failure::Cancelled,
+                        remote: true,
+                    });
+                }
+            }
+            Err(err) => return Err(err),
+        }
+    }
+}
+
 fn unexpected(response: &Response) -> Failure {
     Failure::Remote(format!(
         "unexpected transcription worker response: {response:?}"
@@ -633,6 +723,8 @@ struct ActiveStream {
     /// Audio received but not yet committed, which finalize must still
     /// decode; sizes the feed and finalize deadlines.
     pending_ms: i64,
+    remote: bool,
+    failure: Option<String>,
 }
 
 struct Owner {
@@ -746,34 +838,51 @@ impl Owner {
     /// GPU lists the devices in its hello, which keeps the list current (a
     /// GPU that comes back is just noticed). A CPU-only worker would only
     /// see the CPU, so it doesn't list.
-    fn start_worker(&self, spec: &LoadSpec) -> Result<(Worker, LoadedInfo), Failure> {
+    fn start_worker(&self, spec: &LoadSpec) -> Result<(Worker, LoadedInfo), StartFailure> {
         let cpu_only = self.cpu_only_worker(spec);
         let mut worker = self.shared.hello(cpu_only, !cpu_only)?;
-        let info = worker.load(spec)?;
+        let remote = worker.remote;
+        let info = worker
+            .load(spec)
+            .map_err(|failure| StartFailure { failure, remote })?;
         Ok((worker, info))
     }
 
-    /// Start a worker and load the current spec in it. If a worker with GPU
-    /// backends is lost on the way (backend init, device listing or the
+    /// Start a worker and load the current spec in it. If a local worker with
+    /// GPU backends is lost on the way (backend init, device listing or the
     /// load), mark the GPU unavailable and retry once in a CPU-only worker.
+    /// Remote workers retry transient connect failures with bounded backoff and
+    /// never mark the local GPU unavailable.
     fn start(&mut self) -> Result<LoadedInfo, EngineError> {
         let spec = self.spec.clone().ok_or_else(not_loaded)?;
         let started = Instant::now();
         let wanted = self.effective_spec(&spec);
-        let (worker, info) = match self.start_worker(&wanted) {
+        let epoch = self.shared.epoch();
+        let (worker, info) = match start_with_remote_retry(
+            &REMOTE_RECONNECT_BACKOFF,
+            || {
+                self.shared.cancelled_since(epoch)
+                    || self.shared.unloads_requested.load(Ordering::SeqCst) != self.unloads_done
+            },
+            || self.start_worker(&wanted),
+        ) {
             Ok(started) => started,
-            Err(failure)
-                if failure.worker_lost() && !self.cpu_only_worker(&wanted) && !wanted.pinned() =>
+            Err(err)
+                if err.failure.worker_lost()
+                    && !err.remote
+                    && !self.cpu_only_worker(&wanted)
+                    && !wanted.pinned() =>
             {
                 self.shared.mark_gpu_unavailable(format!(
                     "a worker for '{}' with GPU backends {}",
                     wanted.path.display(),
-                    failure
+                    err.failure
                 ));
                 warn!("Retrying in a CPU-only worker");
-                self.start_worker(&wanted.cpu())?
+                self.start_worker(&wanted.cpu())
+                    .map_err(|e| EngineError::from(e.failure))?
             }
-            Err(failure) => return Err(failure.into()),
+            Err(err) => return Err(err.failure.into()),
         };
         debug!(
             "Worker (pid {}) spawned and loaded the model in {}ms",
@@ -815,16 +924,20 @@ impl Owner {
     }
 
     /// Drop a worker that crashed, hung or hit a backend error (its handle
-    /// already logged the details and native output). If it was on a GPU,
-    /// mark the GPU unavailable so the next worker uses CPU, except after a
-    /// first backend error (see [`Owner::gpu_backend_error`]). Returns
-    /// whether it was on a GPU.
+    /// already logged the details and native output). If it was a local worker
+    /// on a GPU, mark the GPU unavailable so the next worker uses CPU, except
+    /// after a first backend error (see [`Owner::gpu_backend_error`]). Returns
+    /// whether it was a local worker on a GPU.
     fn worker_lost(&mut self, during: &str, failure: &Failure) -> bool {
         // Dropping the handle reaps the process.
-        let info = self.worker.take().and_then(|worker| worker.info.clone());
+        let (was_remote, info) = self
+            .worker
+            .take()
+            .map(|worker| (worker.remote, worker.info.clone()))
+            .unwrap_or((false, None));
         let pinned = self.spec.as_ref().is_some_and(LoadSpec::pinned);
         match info {
-            Some(info) if info.on_gpu => {
+            Some(info) if info.on_gpu && !was_remote => {
                 if matches!(failure, Failure::Backend(_)) && !self.gpu_backend_error {
                     self.gpu_backend_error = true;
                     warn!(
@@ -845,7 +958,11 @@ impl Owner {
 
     /// Deadlines for the device the current worker's model runs on.
     fn deadlines(&self) -> Deadlines {
-        Deadlines::for_device(self.worker_on_gpu())
+        if self.worker.as_ref().is_some_and(|worker| worker.remote) {
+            REMOTE_DEADLINES
+        } else {
+            Deadlines::for_device(self.worker_on_gpu())
+        }
     }
 
     fn worker_on_gpu(&self) -> bool {
@@ -960,7 +1077,7 @@ impl Owner {
 
     fn stream_begin(
         &mut self,
-        active: ActiveStream,
+        mut active: ActiveStream,
         run: &RunOptions,
         stream: &StreamOptions,
     ) -> Result<(), EngineError> {
@@ -980,6 +1097,7 @@ impl Owner {
             let worker = self.worker.as_mut().expect("worker was just ensured");
             match worker.call(&request, None, CALL_FLOOR) {
                 Ok(Response::Ok) => {
+                    active.remote = worker.remote;
                     self.stream = Some(active);
                     return Ok(());
                 }
@@ -1034,12 +1152,29 @@ impl Owner {
                     error!("Live transcription callback panicked");
                 }
             }
-            Ok(other) => warn!("Stream feed failed: {}", unexpected(&other)),
-            Err(Failure::Remote(message)) => warn!("Stream feed failed: {}", message),
+            Ok(other) => {
+                let message = unexpected(&other).to_string();
+                warn!("Stream feed failed: {}", message);
+                if let Some(stream) = self.stream.as_mut().filter(|s| s.remote) {
+                    stream.failure = Some(message);
+                    stream.closed.store(true, Ordering::Release);
+                }
+            }
+            Err(Failure::Remote(message)) => {
+                warn!("Stream feed failed: {}", message);
+                if let Some(stream) = self.stream.as_mut().filter(|s| s.remote) {
+                    stream.failure = Some(message);
+                    stream.closed.store(true, Ordering::Release);
+                }
+            }
             // Later feeds are skipped, and finalize reports the cancel.
             Err(Failure::Cancelled) => {}
             Err(failure) => {
-                self.stream = None;
+                if let Some(stream) = self.stream.as_mut().filter(|s| s.remote) {
+                    stream.failure = Some(failure.to_string());
+                } else {
+                    self.stream = None;
+                }
                 self.worker_lost("stream feed", &failure);
             }
         }
@@ -1063,8 +1198,12 @@ impl Owner {
             // Lost earlier (or replaced): fall back to batch.
             return Ok(None);
         };
+        if let Some(message) = stream.failure {
+            self.worker = None;
+            return Err(EngineError::Failed(message));
+        }
         if self.worker.is_none() {
-            return Ok(None);
+            return stream_failure(stream.remote, "transcription worker disconnected".into());
         }
         let deadline = self.deadlines().audio(ms_to_samples(stream.pending_ms));
         let started = Instant::now();
@@ -1084,7 +1223,10 @@ impl Owner {
             }
             Ok(other) => {
                 error!("Stream finalize failed: {}", unexpected(&other));
-                Ok(None)
+                if stream.remote {
+                    self.worker = None;
+                }
+                stream_failure(stream.remote, unexpected(&other).to_string())
             }
             Err(Failure::Cancelled) => {
                 // The finalize may never have reached the worker.
@@ -1093,11 +1235,14 @@ impl Owner {
             }
             Err(Failure::Remote(message)) => {
                 error!("Stream finalize failed: {}", message);
-                Ok(None)
+                if stream.remote {
+                    self.worker = None;
+                }
+                stream_failure(stream.remote, message)
             }
             Err(failure) => {
                 self.worker_lost("stream finalize", &failure);
-                Ok(None)
+                stream_failure(stream.remote, failure.to_string())
             }
         }
     }
@@ -1163,6 +1308,7 @@ impl Control {
 /// [`SHUTDOWN_GRACE`] to exit, kills it otherwise, and reaps it: once
 /// dropped, the worker is gone.
 struct Worker {
+    remote: bool,
     control: Arc<Control>,
     responses: mpsc::Receiver<Response>,
     stderr_done: mpsc::Receiver<()>,
@@ -1198,13 +1344,18 @@ impl Worker {
 
     /// Start a worker process. A `cpu_only` worker never registers a GPU
     /// backend.
-    fn spawn(cpu_only: bool) -> io::Result<Self> {
+    fn spawn(cpu_only: bool) -> Result<Self, StartFailure> {
         // Fork: with remote recognition the worker is a command that carries the protocol to
         // the server (`remote.rs`). There is deliberately no local fallback while it is on.
         #[cfg(not(test))]
         let remote = crate::remote::worker_spec();
         #[cfg(test)]
         let remote: Option<crate::remote::Spec> = None;
+        let is_remote = remote.is_some();
+        let spawn_err = |e| StartFailure {
+            failure: Failure::Spawn(e),
+            remote: is_remote,
+        };
         let mut command = match &remote {
             Some(r) => {
                 info!(
@@ -1217,7 +1368,7 @@ impl Worker {
                 c.envs(r.env.iter().map(|(k, v)| (k, v)));
                 c
             }
-            None => Self::local_command(cpu_only)?,
+            None => Self::local_command(cpu_only).map_err(spawn_err)?,
         };
         command
             .env(LOG_LEVEL_ENV, log::max_level().as_str())
@@ -1230,7 +1381,7 @@ impl Worker {
             const CREATE_NO_WINDOW: u32 = 0x0800_0000;
             command.creation_flags(CREATE_NO_WINDOW);
         }
-        let mut child = command.spawn()?;
+        let mut child = command.spawn().map_err(spawn_err)?;
         let pid = child.id();
         let stdin = child.stdin.take().expect("stdin is piped");
         let stdout = child.stdout.take().expect("stdout is piped");
@@ -1243,6 +1394,7 @@ impl Worker {
         LIVE_WORKERS.fetch_add(1, Ordering::SeqCst);
         // Built before the threads so a failure below still reaps the child.
         let worker = Worker {
+            remote: is_remote,
             control: Arc::new(Control {
                 pid,
                 child: Mutex::new(child),
@@ -1256,10 +1408,12 @@ impl Worker {
 
         thread::Builder::new()
             .name("transcribe-worker-in".into())
-            .spawn(move || write_frames(stdin, frames))?;
+            .spawn(move || write_frames(stdin, frames))
+            .map_err(spawn_err)?;
         thread::Builder::new()
             .name("transcribe-worker-out".into())
-            .spawn(move || read_responses(stdout, response_tx))?;
+            .spawn(move || read_responses(stdout, response_tx))
+            .map_err(spawn_err)?;
         // Always drain stderr: a full pipe would block the worker.
         let tail = Arc::clone(&worker.stderr_tail);
         thread::Builder::new()
@@ -1280,7 +1434,8 @@ impl Worker {
                     tail.push_back(line);
                 }
                 let _ = stderr_done_tx.send(());
-            })?;
+            })
+            .map_err(spawn_err)?;
 
         debug!(
             "Started {}transcription worker (pid {})",
@@ -1549,6 +1704,55 @@ mod unit_tests {
     use super::*;
 
     #[test]
+    fn remote_stream_failure_does_not_retry_the_same_server_in_batch() {
+        assert!(matches!(
+            stream_failure(true, "server stalled".into()),
+            Err(EngineError::Failed(message)) if message == "server stalled"
+        ));
+        assert!(matches!(
+            stream_failure(false, "local worker lost".into()),
+            Ok(None)
+        ));
+        assert_eq!(REMOTE_DEADLINES.audio(0), Duration::from_secs(90));
+        assert_eq!(REMOTE_DEADLINES.run(16_000 * 30), Duration::from_secs(180));
+    }
+
+    #[test]
+    fn remote_feed_failure_reaches_finalize_but_cancellation_takes_precedence() {
+        let shared = Arc::new(Shared::default());
+        let mut owner = Owner {
+            shared: Arc::clone(&shared),
+            worker: None,
+            spec: None,
+            stream: None,
+            unloads_done: 0,
+            gpu_backend_error: false,
+        };
+        for cancelled in [false, true] {
+            owner.stream = Some(ActiveStream {
+                id: 1,
+                epoch: 0,
+                closed: Arc::new(AtomicBool::new(false)),
+                on_progress: Box::new(|_| {}),
+                pending_ms: 0,
+                remote: true,
+                failure: Some("GPU stalled".into()),
+            });
+            if cancelled {
+                shared.cancel_epoch.fetch_add(1, Ordering::SeqCst);
+            }
+            let result = owner.finalize(1, false, 0);
+            if cancelled {
+                assert!(matches!(result, Err(EngineError::Cancelled)));
+            } else {
+                assert!(
+                    matches!(result, Err(EngineError::Failed(message)) if message == "GPU stalled")
+                );
+            }
+        }
+    }
+
+    #[test]
     fn deadlines_scale_with_the_audio_above_a_floor() {
         let gpu = Deadlines::for_device(true);
         assert_eq!(gpu, GPU_DEADLINES);
@@ -1572,6 +1776,205 @@ mod unit_tests {
 
         assert_eq!(ms_to_samples(1500), 24_000);
         assert_eq!(ms_to_samples(-5), 0);
+    }
+
+    #[test]
+    fn remote_probe_failure_never_marks_local_gpu_unavailable() {
+        let shared = Shared {
+            gpu_allowed: true,
+            ..Shared::default()
+        };
+        shared.record_probe_failure(
+            &StartFailure {
+                failure: Failure::Crashed("connection refused".into()),
+                remote: true,
+            },
+            false,
+        );
+        assert!(!shared.gpu_unavailable());
+
+        shared.record_probe_failure(
+            &StartFailure {
+                failure: Failure::Crashed("segfault".into()),
+                remote: false,
+            },
+            false,
+        );
+        assert!(shared.gpu_unavailable());
+    }
+
+    #[test]
+    fn remote_start_retries_transient_crash_and_recovers() {
+        let delays = [Duration::from_millis(5), Duration::from_millis(5)];
+        let mut attempts = 0;
+        let res = start_with_remote_retry(
+            &delays,
+            || false,
+            || {
+                attempts += 1;
+                if attempts < 3 {
+                    Err(StartFailure {
+                        failure: Failure::Crashed("connection refused".into()),
+                        remote: true,
+                    })
+                } else {
+                    Ok("connected")
+                }
+            },
+        );
+        assert_eq!(attempts, 3);
+        assert_eq!(res.ok(), Some("connected"));
+    }
+
+    #[test]
+    fn remote_start_stops_retrying_on_cancel_or_non_transient_error() {
+        let delays = [Duration::from_millis(50), Duration::from_millis(50)];
+        let mut attempts = 0;
+        let cancelled = start_with_remote_retry::<()>(
+            &delays,
+            || true,
+            || {
+                attempts += 1;
+                Err(StartFailure {
+                    failure: Failure::Crashed("connection refused".into()),
+                    remote: true,
+                })
+            },
+        );
+        assert_eq!(attempts, 1);
+        assert!(matches!(
+            cancelled,
+            Err(StartFailure {
+                failure: Failure::Cancelled,
+                remote: true
+            })
+        ));
+
+        let mut local_attempts = 0;
+        let local = start_with_remote_retry::<()>(
+            &delays,
+            || false,
+            || {
+                local_attempts += 1;
+                Err(StartFailure {
+                    failure: Failure::Crashed("gpu crash".into()),
+                    remote: false,
+                })
+            },
+        );
+        assert_eq!(local_attempts, 1);
+        assert!(matches!(
+            local,
+            Err(StartFailure {
+                failure: Failure::Crashed(_),
+                remote: false
+            })
+        ));
+
+        let mut remote_err_attempts = 0;
+        let remote_err = start_with_remote_retry::<()>(
+            &delays,
+            || false,
+            || {
+                remote_err_attempts += 1;
+                Err(StartFailure {
+                    failure: Failure::Remote("bad request".into()),
+                    remote: true,
+                })
+            },
+        );
+        assert_eq!(remote_err_attempts, 1);
+        assert!(matches!(
+            remote_err,
+            Err(StartFailure {
+                failure: Failure::Remote(_),
+                remote: true
+            })
+        ));
+    }
+
+    fn dummy_worker(remote: bool, on_gpu: bool) -> Worker {
+        let child = ProcessCommand::new(std::env::current_exe().expect("test executable"))
+            .arg("--help")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn short-lived dummy process");
+        LIVE_WORKERS.fetch_add(1, Ordering::SeqCst);
+        let pid = child.id();
+        let (_resp_tx, responses) = mpsc::channel();
+        let (_err_tx, stderr_done) = mpsc::channel();
+        let info: LoadedInfo = serde_json::from_value(serde_json::json!({
+            "arch": "qwen3_asr",
+            "variant": "test",
+            "backend": if remote { "remote-openvino" } else { "vulkan" },
+            "device": if remote { "remote-gpu" } else { "local-gpu" },
+            "on_gpu": on_gpu,
+            "capabilities": {
+                "native_sample_rate": 16000,
+                "languages": ["en"],
+                "translate_target_languages": [],
+                "max_timestamp_kind": "None",
+                "supports_language_detect": true,
+                "supports_translate": false,
+                "supports_streaming": true,
+                "supports_spec_decode": false,
+                "max_audio_ms": 0
+            },
+            "supports_initial_prompt": false,
+            "supports_long_form": true,
+            "supports_vocabulary": true
+        }))
+        .expect("valid LoadedInfo fixture");
+        Worker {
+            remote,
+            control: Arc::new(Control {
+                pid,
+                child: Mutex::new(child),
+                stdin: Mutex::new(None),
+            }),
+            responses,
+            stderr_done,
+            stderr_tail: Arc::new(Mutex::new(VecDeque::new())),
+            info: Some(info),
+        }
+    }
+
+    #[test]
+    fn remote_worker_loss_never_marks_local_gpu_unavailable() {
+        let shared = Arc::new(Shared {
+            gpu_allowed: true,
+            ..Shared::default()
+        });
+        let mut owner = Owner {
+            shared: Arc::clone(&shared),
+            worker: Some(dummy_worker(true, true)),
+            spec: None,
+            stream: None,
+            unloads_done: 0,
+            gpu_backend_error: false,
+        };
+
+        assert!(!owner.worker_lost("stream feed", &Failure::Crashed("connection reset".into())));
+        assert!(owner.worker.is_none());
+        assert!(!shared.gpu_unavailable());
+        assert!(!owner.gpu_backend_error);
+
+        owner.worker = Some(dummy_worker(true, true));
+        assert!(!owner.worker_lost("transcription", &Failure::Backend("remote error".into())));
+        assert!(!shared.gpu_unavailable());
+        assert!(!owner.gpu_backend_error);
+
+        owner.worker = Some(dummy_worker(true, true));
+        assert!(!owner.worker_lost("transcription", &Failure::Backend("remote error".into())));
+        assert!(!shared.gpu_unavailable());
+        assert!(!owner.gpu_backend_error);
+
+        owner.worker = Some(dummy_worker(false, true));
+        assert!(owner.worker_lost("transcription", &Failure::Crashed("gpu crash".into())));
+        assert!(owner.worker.is_none());
+        assert!(shared.gpu_unavailable());
     }
 }
 

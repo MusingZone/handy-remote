@@ -597,7 +597,13 @@
         "placeholder": "Додати слово",
         "add": "Додати",
         "remove": "Видалити {{word}}",
-        "duplicate": "\"{{word}}\" вже існує"
+        "duplicate": "\"{{word}}\" вже існує",
+        "shared": {
+          "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
+          "pending": "Syncing with the Handy Remote server…",
+          "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
+          "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
+        }
       },
       "voiceActivityDetection": {
         "title": "Виявлення голосової активності",
@@ -1173,6 +1179,8 @@
     "loadingModel": "Завантаження моделі...",
     "remoteWaking": "Пробудження моделей на сервері…",
     "speakNow": "Говоріть",
+    "stopRecording": "Завершити запис",
+    "stopFailed": "Не вдалося завершити запис. Натисніть на мікрофон, щоб спробувати ще раз.",
     "refineOn": "Цей диктант буде відредаговано · натисніть, щоб пропустити",
     "refineOff": "Цей диктант не буде відредаговано · натисніть, щоб увімкнути"
   },

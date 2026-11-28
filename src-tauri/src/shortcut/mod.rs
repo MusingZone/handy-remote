@@ -917,6 +917,7 @@ pub fn update_custom_words(app: AppHandle, words: Vec<String>) -> Result<(), Str
     let mut settings = settings::get_settings(&app);
     settings.custom_words = words;
     settings::write_settings(&app, settings);
+    crate::shared_words::request_sync();
     Ok(())
 }
 

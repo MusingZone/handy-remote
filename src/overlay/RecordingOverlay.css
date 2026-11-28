@@ -226,6 +226,9 @@
   min-height: 0;
 }
 .stext-cap {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
   /* Vertical counterpart of the .scard clamp: show fewer lines rather than clip.
      20px = cap padding (12) + card borders (2) + 6px slack for zoom rounding. */
   max-height: min(var(--ov-cap-max-h), calc(100vh - var(--ov-base-h) - 20px));
@@ -302,6 +305,11 @@
   align-items: center;
   gap: 10px;
   justify-self: end;
+}
+.scopy-status {
+  padding: 0 14px;
+  color: var(--color-text);
+  font-size: 12px;
 }
 .sdot {
   width: 7px;
@@ -543,6 +551,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.sstop-error {
+  box-sizing: border-box;
+  width: 68px;
+  padding: 0 3px;
+  color: var(--color-error);
+}
 
 /* mic warm-up cue: until the first microphone samples arrive the row is dimmed. When they
    arrive the border flashes twice in the accent colour, the dot swells and a short 请讲 label
@@ -610,9 +624,33 @@
   height: 14px;
   margin-left: 6px;
   color: var(--s-accent);
-  opacity: 0;
-  pointer-events: none;
+  opacity: 1;
   animation: scue-say 2200ms ease forwards;
+}
+.sstop {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--s-hair);
+  cursor: pointer;
+}
+.sstop:hover,
+.sstop:focus-visible {
+  background: var(--s-accent-soft);
+  outline: 1px solid var(--s-accent);
+}
+.sstop.arming,
+.sstop:disabled {
+  color: var(--s-muted);
+  animation: none;
+}
+.sstop:disabled {
+  cursor: wait;
+}
+.sstop.arming::after {
+  animation: none;
 }
 .scue svg {
   width: 12px;
@@ -622,6 +660,7 @@
 .scue::after {
   content: "";
   position: absolute;
+  pointer-events: none;
   inset: 0;
   border: 1.5px solid var(--s-accent);
   border-radius: 50%;
@@ -649,7 +688,7 @@
     transform: none;
   }
   100% {
-    opacity: 0;
+    opacity: 1;
   }
 }
 @media (prefers-reduced-motion: reduce) {

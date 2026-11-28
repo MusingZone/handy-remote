@@ -597,7 +597,13 @@
         "placeholder": "Ajouter un mot",
         "add": "Ajouter",
         "remove": "Supprimer {{word}}",
-        "duplicate": "\"{{word}}\" existe déjà"
+        "duplicate": "\"{{word}}\" existe déjà",
+        "shared": {
+          "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
+          "pending": "Syncing with the Handy Remote server…",
+          "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
+          "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
+        }
       },
       "voiceActivityDetection": {
         "title": "Détection d'activité vocale (VAD)",
@@ -1173,6 +1179,8 @@
     "loadingModel": "Chargement du modèle...",
     "remoteWaking": "Réveil des modèles du serveur…",
     "speakNow": "Parlez",
+    "stopRecording": "Terminer l'enregistrement",
+    "stopFailed": "Impossible de terminer l'enregistrement. Cliquez sur le microphone pour réessayer.",
     "refineOn": "Cette dictée sera retouchée · cliquer pour l'ignorer",
     "refineOff": "Cette dictée ne sera pas retouchée · cliquer pour la retoucher"
   },

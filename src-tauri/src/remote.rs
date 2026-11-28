@@ -694,6 +694,77 @@ fn read_frame(r: &mut impl Read) -> std::io::Result<Value> {
     serde_json::from_slice(&j).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }
 
+/// The connection command for side requests to the configured Handy Remote server (not a cloud
+/// service), or None when recognition does not use one.
+pub fn server_spec() -> Option<Spec> {
+    if crate::cloud_asr::active() {
+        return None;
+    }
+    let st = read_state()?;
+    if st.settings.enabled {
+        return build(&st.data_dir, &st.settings, st.settings.server_port);
+    }
+    let l = st.legacy?;
+    Some(Spec {
+        program: PathBuf::from(l.command),
+        args: l.args,
+        env: vec![],
+    })
+}
+
+/// A short-lived extra connection to the server for requests outside transcription.
+pub struct ServerSession {
+    child: std::process::Child,
+    stdin: std::process::ChildStdin,
+    replies: mpsc::Receiver<std::io::Result<Value>>,
+}
+
+impl ServerSession {
+    pub fn open(spec: &Spec) -> Result<Self, String> {
+        let mut child = spec
+            .command()
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|e| format!("{}: {e}", spec.program.display()))?;
+        let stdin = child.stdin.take().ok_or("no stdin")?;
+        let mut stdout = child.stdout.take().ok_or("no stdout")?;
+        let (tx, replies) = mpsc::channel();
+        std::thread::spawn(move || loop {
+            let r = read_frame(&mut stdout);
+            let failed = r.is_err();
+            if tx.send(r).is_err() || failed {
+                return;
+            }
+        });
+        Ok(Self {
+            child,
+            stdin,
+            replies,
+        })
+    }
+
+    pub fn call(&mut self, msg: &Value, timeout: Duration) -> Result<Value, String> {
+        self.stdin
+            .write_all(&frame(msg))
+            .and_then(|_| self.stdin.flush())
+            .map_err(|e| format!("the connection closed: {e}"))?;
+        match self.replies.recv_timeout(timeout) {
+            Ok(Ok(v)) => Ok(v),
+            Ok(Err(e)) => Err(format!("the connection closed: {e}")),
+            Err(_) => Err(format!("no answer within {} s", timeout.as_secs())),
+        }
+    }
+}
+
+impl Drop for ServerSession {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
 /// Connect with `settings` (saved or not) and ask the server for its status.
 pub fn test_connection(
     data_dir: &Path,
@@ -831,7 +902,9 @@ pub fn change_remote_settings(app: AppHandle, remote: RemoteSettings) -> Result<
             let _ = std::fs::rename(&legacy, dir.join(format!("{LEGACY_FILE}.migrated")));
         }
     }
-    switch_recognition(&app, remote, changed)
+    switch_recognition(&app, remote, changed)?;
+    crate::shared_words::request_sync();
+    Ok(())
 }
 
 /// Apply new remote settings and point the model selection at the remote server or cloud service

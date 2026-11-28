@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "overlay-clipboard",
+  "description": "Copy live transcription without activating the recording overlay.",
+  "windows": ["recording_overlay"],
+  "permissions": ["clipboard-manager:allow-write-text"]
+}

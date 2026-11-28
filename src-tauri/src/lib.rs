@@ -31,6 +31,7 @@ pub mod refine;
 pub mod remote;
 mod secure_input;
 mod settings;
+mod shared_words;
 mod shortcut;
 mod signal_handle;
 mod system_languages;
@@ -715,6 +716,8 @@ pub fn run(cli_args: CliArgs) {
             remote::remote_test_connection,
             remote::remote_client_key,
             remote::remote_detect_ssh,
+            shared_words::shared_words_status,
+            shared_words::sync_shared_words,
             cloud_asr::cloud_asr_providers,
             cloud_asr::change_cloud_asr_settings,
             cloud_asr::cloud_asr_test,
@@ -796,6 +799,7 @@ pub fn run(cli_args: CliArgs) {
             trigger_update_check,
             show_main_window_command,
             commands::cancel_operation,
+            commands::stop_recording,
             commands::set_refine_skipped,
             commands::is_portable,
             commands::is_update_checks_locked,
@@ -1171,9 +1175,29 @@ pub fn run(cli_args: CliArgs) {
             let devices_app_handle = app_handle.clone();
             std::thread::spawn(move || {
                 let tm = devices_app_handle.state::<Arc<TranscriptionManager>>();
-                crate::managers::transcription::report_compute_devices(&tm);
+                crate::managers::transcription::report_compute_devices_with_retry(
+                    &tm,
+                    remote::active(),
+                );
                 let _ = crate::managers::transcription::get_available_accelerators(&tm);
             });
+
+            // Load the VAD now rather than on the first shortcut press. Its first
+            // load dlopens every ggml-cpu-*.dll variant to pick the best one;
+            // after an install or update, antivirus scans each new DLL then
+            // (Defender cloud lookups measured ~1 s per file), which otherwise
+            // kept the first recording's overlay waiting for 7-14 s.
+            let vad_app_handle = app_handle.clone();
+            std::thread::spawn(move || {
+                let started = std::time::Instant::now();
+                let rm = vad_app_handle.state::<Arc<AudioRecordingManager>>();
+                match rm.preload_vad() {
+                    Ok(()) => log::info!("VAD preloaded at startup in {:?}", started.elapsed()),
+                    Err(e) => log::debug!("VAD preload at startup failed: {}", e),
+                }
+            });
+
+            shared_words::start(&app_handle);
 
             // Hide tray icon if --no-tray was passed
             if cli_args.no_tray {

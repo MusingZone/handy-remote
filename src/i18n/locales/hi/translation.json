@@ -597,7 +597,13 @@
         "placeholder": "शब्द जोड़ें",
         "add": "जोड़ें",
         "remove": "{{word}} हटाएं",
-        "duplicate": "\"{{word}}\" पहले से मौजूद है"
+        "duplicate": "\"{{word}}\" पहले से मौजूद है",
+        "shared": {
+          "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
+          "pending": "Syncing with the Handy Remote server…",
+          "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
+          "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
+        }
       },
       "voiceActivityDetection": {
         "title": "वॉइस एक्टिविटी डिटेक्शन",
@@ -1173,6 +1179,8 @@
     "loadingModel": "मॉडल लोड हो रहा है...",
     "remoteWaking": "सर्वर पर मॉडल जगाए जा रहे हैं…",
     "speakNow": "अब बोलें",
+    "stopRecording": "रिकॉर्डिंग समाप्त करें",
+    "stopFailed": "रिकॉर्डिंग समाप्त नहीं हो सकी। फिर कोशिश करने के लिए माइक्रोफ़ोन पर क्लिक करें।",
     "refineOn": "यह डिक्टेशन सुधारा जाएगा · छोड़ने के लिए क्लिक करें",
     "refineOff": "यह डिक्टेशन नहीं सुधारा जाएगा · सुधारने के लिए क्लिक करें"
   },

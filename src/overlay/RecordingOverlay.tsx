@@ -1,4 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { Check, Copy } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "./RecordingOverlay.css";
@@ -75,6 +77,13 @@ const RecordingOverlay: React.FC = () => {
   const [phase, setPhase] = useState<StreamPhase>("listening");
   const [workKind, setWorkKind] = useState<StreamWorkKind>("transcribing");
   const [elapsed, setElapsed] = useState(0);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const [stopPending, setStopPending] = useState(false);
+  const [stopFailed, setStopFailed] = useState(false);
+  const stopRequestRef = useRef<object | null>(null);
   // Bumped on each new streaming session so the Live card remounts fresh (replays
   // the pop-in, and never animates in from the previous panel's open size).
   const [session, setSession] = useState(0);
@@ -100,6 +109,9 @@ const RecordingOverlay: React.FC = () => {
   const direction = getLanguageDirection(i18n.language);
 
   useEffect(() => {
+    let disposed = false;
+    let generation = 0;
+    let cleanup: (() => void) | undefined;
     const setupEventListeners = async () => {
       const unlistenNotice = await listen<Notice>("overlay-notice", (event) => {
         clearTimeout(fadeTimerRef.current);
@@ -113,6 +125,7 @@ const RecordingOverlay: React.FC = () => {
       });
 
       const unlistenShow = await listen("show-overlay", async (event) => {
+        const shownGeneration = ++generation;
         const overlayState = event.payload as OverlayState;
         clearTimeout(fadeTimerRef.current);
         if (!isNoticeState(overlayState)) setNotice(null);
@@ -124,6 +137,11 @@ const RecordingOverlay: React.FC = () => {
           smoothedLevelsRef.current = Array(16).fill(0);
           setLevels(Array(WAVE_BARS).fill(0));
           setStreamText({ committed: "", tentative: "" });
+          setCopyState("idle");
+          clearTimeout(copyTimerRef.current);
+          stopRequestRef.current = null;
+          setStopPending(false);
+          setStopFailed(false);
         }
 
         await syncLanguageFromSettings();
@@ -139,6 +157,7 @@ const RecordingOverlay: React.FC = () => {
         } catch {
           // Keep the previous/default placement if settings can't be read.
         }
+        if (disposed || generation !== shownGeneration) return;
         setState(overlayState);
         if (overlayState === "streaming") {
           setPhase("listening");
@@ -151,11 +170,13 @@ const RecordingOverlay: React.FC = () => {
       });
 
       const unlistenHide = await listen("hide-overlay", () => {
+        generation += 1;
         setIsVisible(false);
         setCaptureReady(false);
         // A notice keeps rendering while it fades. Dropping the transcript here
         // stops a later notice from showing an old session's text.
         clearTimeout(fadeTimerRef.current);
+        clearTimeout(copyTimerRef.current);
         fadeTimerRef.current = setTimeout(() => {
           setNotice(null);
           setStreamText({ committed: "", tentative: "" });
@@ -248,10 +269,23 @@ const RecordingOverlay: React.FC = () => {
         unlistenModel();
         clearTimeout(modelLoadTimerRef.current);
         clearTimeout(fadeTimerRef.current);
+        clearTimeout(copyTimerRef.current);
       };
     };
 
-    setupEventListeners();
+    setupEventListeners()
+      .then((unlisten) => {
+        if (disposed) unlisten();
+        else cleanup = unlisten;
+      })
+      .catch((error) =>
+        console.error("Failed to listen for overlay updates:", error),
+      );
+    return () => {
+      disposed = true;
+      generation += 1;
+      cleanup?.();
+    };
   }, []);
 
   // Elapsed capture timer starts only once microphone samples are flowing.
@@ -344,6 +378,77 @@ const RecordingOverlay: React.FC = () => {
     </button>
   );
 
+  const copyBtn = (streamText.committed || streamText.tentative) && (
+    <button
+      className="sx"
+      aria-label={t("settings.history.copyToClipboard")}
+      title={t("settings.history.copyToClipboard")}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={async (e) => {
+        e.stopPropagation();
+        const text = streamText.committed + streamText.tentative;
+        try {
+          await writeText(text);
+          setCopyState("copied");
+        } catch (error) {
+          console.error("Failed to copy live transcription:", error);
+          setCopyState("failed");
+        }
+        clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = setTimeout(() => setCopyState("idle"), 2000);
+      }}
+    >
+      {copyState === "copied" ? (
+        <Check aria-hidden="true" />
+      ) : (
+        <Copy aria-hidden="true" />
+      )}
+    </button>
+  );
+
+  const copyStatus = copyState !== "idle" && (
+    <span
+      className="scopy-status"
+      role="status"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {t(
+        copyState === "copied"
+          ? "settings.debug.liveLogs.copied"
+          : "settings.history.copyError",
+      )}
+    </span>
+  );
+
+  const stopStatus = stopFailed && (
+    <span
+      className="swork-label sstop-error"
+      role="alert"
+      title={t("overlay.stopFailed")}
+    >
+      {t("overlay.stopFailed")}
+    </span>
+  );
+
+  const stopRecording = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (stopRequestRef.current) return;
+    const request = {};
+    stopRequestRef.current = request;
+    setStopPending(true);
+    setStopFailed(false);
+    try {
+      const result = await commands.stopRecording();
+      if (result.status === "error") throw new Error(result.error);
+    } catch (error) {
+      console.error("Failed to stop recording from overlay:", error);
+      if (stopRequestRef.current !== request) return;
+      stopRequestRef.current = null;
+      setStopPending(false);
+      setStopFailed(true);
+    }
+  };
+
   // Fork: per-take refine switch. While recording it toggles; once the take is
   // being processed it can only turn refining off (the reply is then abandoned).
   const refineBtn = (working: boolean) => {
@@ -392,36 +497,43 @@ const RecordingOverlay: React.FC = () => {
   const listeningRow = (showTimer: boolean, showCancel: boolean) => (
     <div className="sbase">
       <div className="sbase-l">
-        <span className={`sdot ${captureReady ? "ready" : "arming"}`} />
-        {captureReady && (
-          <span
-            className="scue"
-            role="status"
-            aria-label={t("overlay.speakNow")}
-          >
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <rect
-                x="5.5"
-                y="1.5"
-                width="5"
-                height="8.5"
-                rx="2.5"
-                fill="currentColor"
-              />
-              <path
-                d="M3.5 7.5a4.5 4.5 0 0 0 9 0M8 12v2.5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-              />
-            </svg>
-          </span>
-        )}
+        <span
+          className={`sdot ${captureReady ? "ready" : "arming"}`}
+          role={captureReady ? "status" : undefined}
+          aria-label={captureReady ? t("overlay.speakNow") : undefined}
+        />
+        <button
+          type="button"
+          className={`scue sstop ${captureReady ? "ready" : "arming"}`}
+          aria-label={t("overlay.stopRecording")}
+          title={t("overlay.stopRecording")}
+          disabled={stopPending}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={stopRecording}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <rect
+              x="5.5"
+              y="1.5"
+              width="5"
+              height="8.5"
+              rx="2.5"
+              fill="currentColor"
+            />
+            <path
+              d="M3.5 7.5a4.5 4.5 0 0 0 9 0M8 12v2.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
       </div>
-      {waveform}
+      {stopStatus || waveform}
       <div className="sbase-r">
         {showTimer && <span className="stimer">{fmtTime(elapsed)}</span>}
+        {copyBtn}
         {refineBtn(false)}
         {showCancel && cancelBtn}
       </div>
@@ -437,6 +549,7 @@ const RecordingOverlay: React.FC = () => {
       </div>
       <span className="swork-label">{label}</span>
       <div className="sbase-r">
+        {copyBtn}
         {refineBtn(true)}
         {showCancel && cancelBtn}
       </div>
@@ -502,6 +615,10 @@ const RecordingOverlay: React.FC = () => {
                 className={`stext-cap ${overflowing ? "overflowing" : ""}`}
                 ref={capRef}
                 onScroll={handleStreamScroll}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={() => {
+                  pinnedRef.current = false;
+                }}
               >
                 <p>
                   {loadingNotice && (
@@ -523,16 +640,23 @@ const RecordingOverlay: React.FC = () => {
               </div>
             </div>
           </div>
-          {liveNotice
-            ? noticeRow
-            : working
-              ? workingRow(
-                  workKind === "polishing"
-                    ? t("overlay.processing")
-                    : transcribingLabel,
-                  true,
-                )
-              : listeningRow(open, true)}
+          {copyStatus}
+          {liveNotice ? (
+            <div className="sbase">
+              <NoticeBadgeIcon className="nglyph" />
+              <span className="nlabel">{noticeTitle}</span>
+              <div className="sbase-r">{copyBtn}</div>
+            </div>
+          ) : working ? (
+            workingRow(
+              workKind === "polishing"
+                ? t("overlay.processing")
+                : transcribingLabel,
+              true,
+            )
+          ) : (
+            listeningRow(open, true)
+          )}
         </div>
       </div>
     );

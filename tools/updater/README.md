@@ -17,6 +17,20 @@ powershell -ExecutionPolicy RemoteSigned -File "$env:LOCALAPPDATA\handy-remote\u
 powershell -ExecutionPolicy RemoteSigned -File tools\updater\Install-AutoUpdate.ps1 -Uninstall
 ```
 
+For dictation into administrator applications, Handy must also run as administrator. From an
+administrator PowerShell, opt in on that PC only:
+
+```powershell
+powershell -ExecutionPolicy RemoteSigned -File tools\updater\Install-AutoUpdate.ps1 -RunElevated
+```
+
+Reinstalling the task preserves its existing run level. A manual trial update also checks the
+registered task's policy (including when Handy is stopped): if that task runs elevated, an unelevated
+updater refuses to install rather than silently restarting Handy without permission to paste or read
+the caret of administrator windows. Its post-install health check also verifies the running process's
+elevated token, not just that a PID exists. For a custom task name, pass the same `-TaskName` to manual updates.
+Do not stop the app manually and bypass this check.
+
 Each run:
 
 1. reads the latest release of `MusingZone/handy-remote` (set `GITHUB_TOKEN` for a private fork); when the

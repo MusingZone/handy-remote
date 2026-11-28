@@ -46,6 +46,20 @@ async remoteClientKey(remote: RemoteSettings, create: boolean) : Promise<Result<
 async remoteDetectSsh() : Promise<string | null> {
     return await TAURI_INVOKE("remote_detect_ssh");
 },
+async sharedWordsStatus() : Promise<SharedWordsStatus> {
+    return await TAURI_INVOKE("shared_words_status");
+},
+/**
+ * Sync now and return the outcome (the settings page calls this when it opens).
+ */
+async syncSharedWords() : Promise<Result<SharedWordsStatus, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("sync_shared_words") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async cloudAsrProviders() : Promise<CloudAsrProvider[]> {
     return await TAURI_INVOKE("cloud_asr_providers");
 },
@@ -709,6 +723,14 @@ async showMainWindowCommand() : Promise<Result<null, string>> {
 async cancelOperation() : Promise<void> {
     await TAURI_INVOKE("cancel_operation");
 },
+async stopRecording() : Promise<Result<null, string>> {
+    try {
+        return { status: "ok", data: await TAURI_INVOKE("stop_recording") };
+    } catch (e) {
+        if (typeof e === "string") return { status: "error", error: e };
+        throw e;
+    }
+},
 /**
  * Fork: the overlay's refine switch, for the dictation in progress only.
  */
@@ -1339,7 +1361,11 @@ refine_prompt_seeded?: boolean;
  * Fork: the file with the user's own refine rules; empty = `refine-rules.txt` in the app
  * data folder (see `refine::user_rules`).
  */
-refine_rules_file?: string }
+refine_rules_file?: string; 
+/**
+ * Fork: `custom_words` as of the last sync with the server lexicon (see `shared_words.rs`).
+ */
+custom_words_synced?: string[] }
 export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
 export type AutoUnavailableReason = 
@@ -1698,6 +1724,24 @@ old_server: boolean }
  */
 export type RetiredModel = { id: string; name: string; size_mb: number; replacement_repo: string }
 export type SecretMap = Partial<{ [key in string]: string }>
+export type SharedWordsState = 
+/**
+ * Recognition does not use a Handy Remote server: the list stays on this PC.
+ */
+"off" | 
+/**
+ * No sync finished yet.
+ */
+"pending" | "synced" | 
+/**
+ * The server is too old to share the list.
+ */
+"unsupported" | "failed"
+export type SharedWordsStatus = { state: SharedWordsState; words: number; 
+/**
+ * Unix time (ms) of the last successful sync.
+ */
+synced_at: number | null; error: string | null }
 export type SecureInputStatus = { 
 /**
  * Secure input is currently enabled (live check)

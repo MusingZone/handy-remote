@@ -597,7 +597,13 @@
         "placeholder": "Přidat slovo",
         "add": "Přidat",
         "remove": "Odebrat {{word}}",
-        "duplicate": "\"{{word}}\" již existuje"
+        "duplicate": "\"{{word}}\" již existuje",
+        "shared": {
+          "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
+          "pending": "Syncing with the Handy Remote server…",
+          "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
+          "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
+        }
       },
       "voiceActivityDetection": {
         "title": "Detekce hlasové aktivity",
@@ -1173,6 +1179,8 @@
     "loadingModel": "Načítání modelu...",
     "remoteWaking": "Probouzení modelů na serveru…",
     "speakNow": "Mluvte",
+    "stopRecording": "Ukončit nahrávání",
+    "stopFailed": "Nahrávání se nepodařilo ukončit. Klikněte na mikrofon a zkuste to znovu.",
     "refineOn": "Tento diktát bude upraven · kliknutím přeskočíte",
     "refineOff": "Tento diktát nebude upraven · kliknutím upravíte"
   },

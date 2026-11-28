@@ -707,8 +707,15 @@ impl TranscriptionManager {
         }
 
         *is_loading = true;
+        drop(is_loading);
+
+        let loading_guard = LoadingGuard {
+            is_loading: Arc::clone(&self.is_loading),
+            loading_condvar: Arc::clone(&self.loading_condvar),
+        };
         let self_clone = self.clone();
         thread::spawn(move || {
+            let _guard = loading_guard;
             if reload_pending {
                 self_clone
                     .reload_model_on_next_use
@@ -721,9 +728,6 @@ impl TranscriptionManager {
                     self_clone.raise_model_load_failed(&settings.selected_model, &e);
                 }
             }
-            let mut is_loading = self_clone.is_loading.lock().unwrap();
-            *is_loading = false;
-            self_clone.loading_condvar.notify_all();
         });
         true
     }
@@ -1839,6 +1843,14 @@ fn drain_until_finalize(rx: mpsc::Receiver<StreamCmd>) {
     }
 }
 
+const REMOTE_DEVICE_PROBE_RETRY_DELAYS: [Duration; 5] = [
+    Duration::from_secs(2),
+    Duration::from_secs(4),
+    Duration::from_secs(8),
+    Duration::from_secs(15),
+    Duration::from_secs(30),
+];
+
 /// Log the compute devices transcribe-cpp registers.
 ///
 /// Devices are listed by a transcription worker process (see
@@ -1848,23 +1860,63 @@ fn drain_until_finalize(rx: mpsc::Receiver<StreamCmd>) {
 /// (the first launch after an install or update), so the app calls this from
 /// a background thread instead of its startup path.
 pub fn report_compute_devices(tm: &TranscriptionManager) {
+    report_compute_devices_with_retry(tm, false);
+}
+
+/// Like [`report_compute_devices`], but when `retry_remote` is true and the
+/// remote server is still booting up, retries with bounded backoff so the
+/// device list populates once the server opens its port.
+pub fn report_compute_devices_with_retry(tm: &TranscriptionManager, retry_remote: bool) {
     if transcribe_gpu_disabled_for_host() {
         warn!(
             "Windows x64 build is running under emulation on an ARM64 host; \
              disabling transcribe.cpp GPU acceleration and using CPU"
         );
     }
-    match transcribe_compute_devices(&tm.engine) {
-        Ok(devices) => info!(
-            "transcribe-cpp initialized with {} compute device(s): [{}]",
-            devices.len(),
-            devices
-                .iter()
-                .map(|d| format!("{} ({})", d.name, d.kind))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        Err(e) => warn!("transcribe-cpp compute devices are unavailable: {}", e),
+    let mut delays = if retry_remote {
+        REMOTE_DEVICE_PROBE_RETRY_DELAYS.iter().copied()
+    } else {
+        [].iter().copied()
+    };
+    loop {
+        match transcribe_compute_devices(&tm.engine) {
+            Ok(devices) => {
+                info!(
+                    "transcribe-cpp initialized with {} compute device(s): [{}]",
+                    devices.len(),
+                    devices
+                        .iter()
+                        .map(|d| format!("{} ({})", d.name, d.kind))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+                return;
+            }
+            Err(e) => {
+                let Some(delay) = delays.next() else {
+                    warn!("transcribe-cpp compute devices are unavailable: {}", e);
+                    return;
+                };
+                if tm.shutdown_signal.load(Ordering::Relaxed) {
+                    return;
+                }
+                warn!(
+                    "transcribe-cpp remote compute devices not yet reachable ({}); retrying in {:?}",
+                    e, delay
+                );
+                let deadline = std::time::Instant::now() + delay;
+                while std::time::Instant::now() < deadline {
+                    if tm.shutdown_signal.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+                    thread::sleep(remaining.min(Duration::from_millis(200)));
+                }
+                if !crate::remote::active() {
+                    return;
+                }
+            }
+        }
     }
 }
 
@@ -2479,6 +2531,39 @@ mod tests {
             assert!(!echoes_vocabulary(speech, &words), "{speech}");
         }
         assert!(!echoes_vocabulary("Handy Qwen VRAM", &[]));
+    }
+
+    #[test]
+    fn loading_guard_resets_flag_and_notifies_waiters_on_panic() {
+        let is_loading = Arc::new(Mutex::new(true));
+        let loading_condvar = Arc::new(Condvar::new());
+        let guard = LoadingGuard {
+            is_loading: Arc::clone(&is_loading),
+            loading_condvar: Arc::clone(&loading_condvar),
+        };
+
+        let waiter_flag = Arc::clone(&is_loading);
+        let waiter_cv = Arc::clone(&loading_condvar);
+        let waiter = thread::spawn(move || {
+            let guard = waiter_flag.lock().unwrap();
+            let (guard, timeout) = waiter_cv
+                .wait_timeout_while(guard, Duration::from_secs(2), |loading| *loading)
+                .unwrap();
+            assert!(
+                !timeout.timed_out(),
+                "waiter should be woken by LoadingGuard::drop"
+            );
+            assert!(!*guard);
+        });
+
+        let panicker = thread::spawn(move || {
+            let _guard = guard;
+            panic!("simulated model load panic");
+        });
+
+        assert!(panicker.join().is_err());
+        waiter.join().unwrap();
+        assert!(!*is_loading.lock().unwrap());
     }
 }
 

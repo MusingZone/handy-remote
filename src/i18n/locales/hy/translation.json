@@ -597,7 +597,13 @@
         "placeholder": "Ավելացնել բառ",
         "add": "Ավելացնել",
         "remove": "Հեռացնել «{{word}}» բառը",
-        "duplicate": "«{{word}}» բառն արդեն կա"
+        "duplicate": "«{{word}}» բառն արդեն կա",
+        "shared": {
+          "synced": "Shared through the Handy Remote server: {{count}} words, also used on your other PCs.",
+          "pending": "Syncing with the Handy Remote server…",
+          "unsupported": "Update the Handy Remote server to share these words with your other PCs.",
+          "failed": "Could not sync with the server ({{error}}). Your changes are kept and synced later."
+        }
       },
       "voiceActivityDetection": {
         "title": "Ձայնային ակտիվության հայտնաբերում",
@@ -1173,6 +1179,8 @@
     "loadingModel": "Բեռնվում է մոդելը…",
     "remoteWaking": "Waking the server's models…",
     "speakNow": "Speak now",
+    "stopRecording": "Ավարտել ձայնագրությունը",
+    "stopFailed": "Չհաջողվեց ավարտել ձայնագրությունը։ Կրկին փորձելու համար սեղմեք խոսափողը։",
     "refineOn": "Polishing this dictation · click to skip",
     "refineOff": "Not polishing this dictation · click to polish"
   },

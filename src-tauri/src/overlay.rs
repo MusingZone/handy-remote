@@ -819,6 +819,11 @@ pub fn show_overlay_notice(app_handle: &AppHandle, notice: &Notice) {
 
         let generation = OVERLAY_SHOW_GENERATION.load(Ordering::SeqCst);
         OVERLAY_NOTICE_GENERATION.store(generation, Ordering::SeqCst);
+        // A live notice may be the only remaining copy of a partial transcript.
+        // Keep it available until dismissal or the next dictation.
+        if state == "live_notice" {
+            return;
+        }
         std::thread::spawn(move || {
             std::thread::sleep(NOTICE_HOLD);
             if OVERLAY_SHOW_GENERATION.load(Ordering::SeqCst) == generation {
